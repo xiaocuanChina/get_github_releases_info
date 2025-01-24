@@ -1,0 +1,34 @@
+# 环境变量文件
+.env
+
+# Node.js
+get_github_info_vue/node_modules/
+get_github_info_vue/dist/
+get_github_info_vue/.env.local
+get_github_info_vue/.env.*.local
+get_github_info_vue/npm-debug.log*
+get_github_info_vue/yarn-debug.log*
+get_github_info_vue/yarn-error.log*
+
+# IDE 配置文件
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+node_modules

@@ -1,12 +1,12 @@
 # 需要的环境
 
-[Node.js — 下载 Node.js®](https://nodejs.org/zh-cn/download)
+## [Node.js](https://nodejs.org/zh-cn/download)
 
 - 需要管理不同版本的nodejs：[nodejs版本管理器](https://github.com/coreybutler/nvm-windows)
 
-[Download Python | Python.org](https://www.python.org/downloads/)
+## [Python](https://www.python.org/downloads/)
 
-OAuth Apps
+## OAuth Apps
 
 1. [Developer applications](https://github.com/settings/developers)
 

@@ -37,8 +37,9 @@ if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
 
 GITHUB_REDIRECT_URI = "http://localhost:8080/auth/callback"
 
+ttl_time_minute = 60
 # 在全局添加缓存
-releases_cache = TTLCache(maxsize=100, ttl=300)  # 5分钟缓存
+releases_cache = TTLCache(maxsize=100, ttl=ttl_time_minute * 30)  # 5分钟缓存
 
 
 async def fetch_repo_info(session: aiohttp.ClientSession, repo_name: str, access_token: str) -> Dict:
@@ -76,7 +77,7 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
         print(f"正在获取 {repo_name} 的最新 release...")
         async with session.get(url, headers=headers) as response:
             print(f"{repo_name} 响应状态码: {response.status}")
-            
+
             if response.status == 200:
                 releases = await response.json()
                 if releases:
@@ -95,7 +96,8 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
                             "assets": latest_release.get("assets", [])
                         }
                     }
-                    print(f"成功获取 {repo_name} 的 release: {latest_release['tag_name']}, 发布时间: {latest_release['published_at']}")
+                    print(
+                        f"成功获取 {repo_name} 的 release: {latest_release['tag_name']}, 发布时间: {latest_release['published_at']}")
                     return result
                 else:
                     print(f"{repo_name} 没有 releases")
@@ -165,7 +167,7 @@ async def github_callback(code: str):
         async with aiohttp.ClientSession() as session:
             print(f"收到授权码: {code[:5]}...")
             print(f"使用的回调 URL: {GITHUB_REDIRECT_URI}")
-            
+
             token_url = "https://github.com/login/oauth/access_token"
             headers = {
                 "Accept": "application/json",
@@ -182,7 +184,7 @@ async def github_callback(code: str):
                 response_text = await response.text()
                 print(f"GitHub OAuth 响应状态码: {response.status}")
                 print(f"GitHub OAuth 响应内容: {response_text}")
-                
+
                 if response.status != 200:
                     raise HTTPException(
                         status_code=response.status,
@@ -357,7 +359,7 @@ async def verify_token(request: Request):
 @app.get("/api/starred-releases/progress")
 async def get_starred_releases_progress(request: Request, token: str, force_refresh: bool = False):
     """使用 SSE 获取带进度的 starred 仓库 releases"""
-    
+
     async def event_generator():
         try:
             # 检查缓存
@@ -377,18 +379,18 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                     "progress": 0,
                     "message": "正在获取仓库列表..."
                 }) + "\n\n"
-                
+
                 # 获取所有starred仓库
                 starred_repos = []
                 page = 1
                 while True:
                     starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
                     async with session.get(
-                        starred_url,
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Accept": "application/vnd.github.v3+json"
-                        }
+                            starred_url,
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Accept": "application/vnd.github.v3+json"
+                            }
                     ) as response:
                         if response.status != 200:
                             break
@@ -409,13 +411,13 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                 batch_size = 10  # 每批处理10个仓库
                 processed = 0
                 releases_data = []
-                
+
                 for i in range(0, len(starred_repos), batch_size):
                     batch = starred_repos[i:i + batch_size]
                     # 并发处理一批仓库
                     tasks = [fetch_releases(session, repo_name, token) for repo_name in batch]
                     batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-                    
+
                     # 处理批次结果
                     for result in batch_results:
                         if isinstance(result, Exception):
@@ -424,10 +426,10 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                                 raise
                         elif result is not None:
                             releases_data.append(result)
-                    
+
                     processed += len(batch)
                     progress = 10 + int(85 * processed / total_repos)
-                    
+
                     # 每批次后发送一次进度更新
                     yield "data: " + json.dumps({
                         "progress": progress,
@@ -435,7 +437,7 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                         "processed_repos": processed,
                         "total_repos": total_repos
                     }) + "\n\n"
-                    
+
                     # 短暂延迟，避免触发 GitHub API 限制
                     await asyncio.sleep(0.05)
 

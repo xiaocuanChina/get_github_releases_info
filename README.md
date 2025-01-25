@@ -45,6 +45,14 @@ pip install -r requirements.txt
 
 ## 本地运行
 
+切换到get_github_info_vue目录下，执行命令
+
+~~~sh
+npm install
+~~~
+
+
+
 安装完成依赖之后执行同目录下的 start.bat 文件 然后访问 http://localhost:8080/
 
 ## 服务器

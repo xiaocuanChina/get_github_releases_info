@@ -1,24 +1,21 @@
 <template>
-  <el-card class="login-card">
-    <div class="login-content">
-      <h2>GitHub Starred Releases</h2>
-      <p>请使用 GitHub 账号登录以查看您的 Starred 仓库的发布信息</p>
-      <el-button type="primary" @click="handleLogin">
-        GitHub 登录
-      </el-button>
-    </div>
-  </el-card>
+  <div class="github-login">
+    <h2>请登录 GitHub 账号</h2>
+    <el-button type="primary" @click="handleLogin" class="login-button">
+      使用 GitHub 登录
+    </el-button>
+  </div>
 </template>
 
 <script>
+import { API_ENDPOINTS } from '@/api/config'
+
 export default {
   name: 'GitHubLogin',
-
   methods: {
     handleLogin() {
-      // 保存当前页面 URL 作为回调后的重定向地址
-      localStorage.setItem('redirect_after_login', window.location.href)
-      window.location.href = 'http://localhost:8000/api/auth/github'
+      // 直接跳转到后端的 GitHub 认证端点
+      window.location.href = API_ENDPOINTS.AUTH_GITHUB;
     }
   }
 }

@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from github import Github
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import asyncio
 import aiohttp
 import os
@@ -13,6 +13,11 @@ import ssl
 import certifi
 from cachetools import TTLCache
 import json
+import sqlite3
+from pydantic import BaseModel
+
+# 添加代理配置
+PROXY_URL = "http://127.0.0.1:10808"  # 您提供的代理地址
 
 # 加载 .env 文件
 env_path = Path('.') / '.env'
@@ -41,6 +46,29 @@ ttl_time_minute = 60
 # 在全局添加缓存
 releases_cache = TTLCache(maxsize=100, ttl=ttl_time_minute * 30)  # 5分钟缓存
 
+# --- 数据库配置 ---
+DATABASE_FILE = "user_activity.db"
+
+def init_db():
+    """初始化数据库，创建表"""
+    conn = sqlite3.connect(DATABASE_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_clicks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_login TEXT NOT NULL,
+            repo_name TEXT NOT NULL,
+            release_tag TEXT NOT NULL,
+            click_time TEXT NOT NULL,
+            release_published_at TEXT NULL -- 新增字段，允许为空以兼容旧记录（如果保留旧DB）
+        )
+    ''')
+    conn.commit()
+    conn.close()
+    print("数据库已初始化")
+
+# 在应用启动时初始化数据库
+init_db()
 
 async def fetch_repo_info(session: aiohttp.ClientSession, repo_name: str, access_token: str) -> Dict:
     """获取仓库基本信息"""
@@ -50,38 +78,41 @@ async def fetch_repo_info(session: aiohttp.ClientSession, repo_name: str, access
         "Accept": "application/vnd.github.v3+json"
     }
 
-    async with session.get(url, headers=headers) as response:
-        if response.status == 200:
-            repo_data = await response.json()
-            return {
-                "avatar_url": repo_data.get("owner", {}).get("avatar_url"),
-                "description": repo_data.get("description")
-            }
+    try:
+        # 使用代理发送请求
+        async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
+            if response.status == 200:
+                repo_data = await response.json()
+                return {
+                    "avatar_url": repo_data.get("owner", {}).get("avatar_url"),
+                    "description": repo_data.get("description")
+                }
+    except aiohttp.ClientConnectorError as e:
+        print(f"连接到 GitHub API 失败: {str(e)}")
+        # 这里可以添加重试逻辑
+    except Exception as e:
+        print(f"获取仓库信息时发生错误: {str(e)}")
+
     return {}
 
 
 async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_token: str) -> Dict:
-    """异步获取单个仓库的最新 release 信息"""
+    """获取仓库的最新 release 信息"""
+    url = f"https://api.github.com/repos/{repo_name}/releases"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
     try:
-        # 获取仓库基本信息
-        repo_info = await fetch_repo_info(session, repo_name, access_token)
-
-        # 获取 release 信息，增加详细的日志和错误处理
-        url = f"https://api.github.com/repos/{repo_name}/releases?per_page=1"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/vnd.github.v3+json",
-            "If-None-Match": ""  # 禁用 GitHub 的 ETag 缓存
-        }
-
-        print(f"正在获取 {repo_name} 的最新 release...")
-        async with session.get(url, headers=headers) as response:
-            print(f"{repo_name} 响应状态码: {response.status}")
-
+        # 使用代理
+        async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
             if response.status == 200:
                 releases = await response.json()
                 if releases:
                     latest_release = releases[0]
+                    # 获取仓库信息
+                    repo_info = await fetch_repo_info(session, repo_name, access_token)
                     result = {
                         "repo_name": repo_name,
                         "avatar_url": repo_info.get("avatar_url"),
@@ -93,7 +124,8 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
                             "html_url": latest_release["html_url"],
                             "body": latest_release["body"],
                             "all_releases_url": f"https://github.com/{repo_name}/releases",
-                            "assets": latest_release.get("assets", [])
+                            "assets": latest_release.get("assets", []),
+                            "prerelease": latest_release["prerelease"]
                         }
                     }
                     print(
@@ -140,11 +172,21 @@ async def fetch_releases_with_limit(session: aiohttp.ClientSession, repo_names: 
     return valid_results
 
 
-async def create_aiohttp_session():
-    """创建带有 SSL 上下文的 aiohttp 会话"""
+async def create_client_session():
+    """创建带有 SSL 上下文和代理的 aiohttp 会话"""
     ssl_context = ssl.create_default_context(cafile=certifi.where())
-    connector = aiohttp.TCPConnector(ssl=ssl_context, force_close=True)
-    return aiohttp.ClientSession(connector=connector)
+    connector = aiohttp.TCPConnector(
+        ssl=ssl_context,
+        force_close=True
+    )
+
+    # 创建会话时设置代理
+    return aiohttp.ClientSession(
+        connector=connector,
+        timeout=aiohttp.ClientTimeout(total=60),
+        headers={"User-Agent": "GitHub-Starred-Releases-App"},
+        trust_env=True,  # 允许从环境变量读取代理设置
+    )
 
 
 @app.get("/api/auth/github")
@@ -164,9 +206,14 @@ async def github_auth():
 async def github_callback(code: str):
     """GitHub OAuth 回调处理"""
     try:
-        async with aiohttp.ClientSession() as session:
+        # 创建带有超时和代理的会话
+        timeout = aiohttp.ClientTimeout(total=30)  # 30秒超时
+        conn = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
+
+        async with aiohttp.ClientSession(timeout=timeout, connector=conn) as session:
             print(f"收到授权码: {code[:5]}...")
             print(f"使用的回调 URL: {GITHUB_REDIRECT_URI}")
+            print(f"使用代理: {PROXY_URL}")
 
             token_url = "https://github.com/login/oauth/access_token"
             headers = {
@@ -180,39 +227,47 @@ async def github_callback(code: str):
                 "redirect_uri": GITHUB_REDIRECT_URI
             }
 
-            async with session.post(token_url, data=data, headers=headers) as response:
-                response_text = await response.text()
-                print(f"GitHub OAuth 响应状态码: {response.status}")
-                print(f"GitHub OAuth 响应内容: {response_text}")
+            # 尝试连接 GitHub API，使用代理
+            try:
+                async with session.post(token_url, data=data, headers=headers, proxy=PROXY_URL) as response:
+                    response_text = await response.text()
+                    print(f"GitHub OAuth 响应状态码: {response.status}")
+                    print(f"GitHub OAuth 响应内容: {response_text}")
 
-                if response.status != 200:
-                    raise HTTPException(
-                        status_code=response.status,
-                        detail=f"GitHub OAuth 错误: {response_text}"
-                    )
+                    if response.status != 200:
+                        raise HTTPException(
+                            status_code=response.status,
+                            detail=f"GitHub OAuth 错误: {response_text}"
+                        )
 
-                try:
-                    token_data = json.loads(response_text)
-                except json.JSONDecodeError:
-                    raise HTTPException(
-                        status_code=500,
-                        detail="无法解析 GitHub 响应"
-                    )
+                    try:
+                        token_data = json.loads(response_text)
+                    except json.JSONDecodeError:
+                        raise HTTPException(
+                            status_code=500,
+                            detail="无法解析 GitHub 响应"
+                        )
 
-                if "error" in token_data:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"GitHub OAuth 错误: {token_data.get('error_description', token_data['error'])}"
-                    )
+                    if "error" in token_data:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"GitHub OAuth 错误: {token_data.get('error_description', token_data['error'])}"
+                        )
 
-                access_token = token_data.get("access_token")
-                if not access_token:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="未能获取访问令牌"
-                    )
+                    access_token = token_data.get("access_token")
+                    if not access_token:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="未能获取访问令牌"
+                        )
 
-                return {"access_token": access_token}
+                    return {"access_token": access_token}
+            except aiohttp.ClientConnectorError as e:
+                print(f"连接到 GitHub API 失败: {str(e)}")
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"无法连接到 GitHub 服务器: {str(e)}"
+                )
 
     except aiohttp.ClientError as e:
         print(f"网络请求错误: {str(e)}")
@@ -331,13 +386,14 @@ async def verify_token(request: Request):
     access_token = auth_header.split(" ")[1]
     try:
         async with aiohttp.ClientSession() as session:
-            # 获取用户信息
+            # 获取用户信息，使用代理
             async with session.get(
                     "https://api.github.com/user",
                     headers={
                         "Authorization": f"Bearer {access_token}",
                         "Accept": "application/vnd.github.v3+json"
-                    }
+                    },
+                    proxy=PROXY_URL
             ) as response:
                 if response.status == 200:
                     user_data = await response.json()
@@ -358,7 +414,7 @@ async def verify_token(request: Request):
 
 @app.get("/api/starred-releases/progress")
 async def get_starred_releases_progress(request: Request, token: str, force_refresh: bool = False):
-    """使用 SSE 获取带进度的 starred 仓库 releases"""
+    """获取 starred 仓库的 releases 信息，带进度更新"""
 
     async def event_generator():
         try:
@@ -390,7 +446,8 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                             headers={
                                 "Authorization": f"Bearer {token}",
                                 "Accept": "application/vnd.github.v3+json"
-                            }
+                            },
+                            proxy=PROXY_URL  # 添加代理
                     ) as response:
                         if response.status != 200:
                             break
@@ -482,6 +539,150 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
         }
     )
 
+
+async def get_user_login_from_token(access_token: str) -> str | None:
+    """根据 token 获取 GitHub 用户登录名"""
+    try:
+        # 创建带有SSL上下文和代理的aiohttp会话
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        timeout = aiohttp.ClientTimeout(total=30)
+
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            async with session.get(
+                    "https://api.github.com/user",
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Accept": "application/vnd.github.v3+json",
+                        "User-Agent": "GitHub-Starred-Releases-App" # 添加 User-Agent
+                    },
+                    proxy=PROXY_URL # 使用代理
+            ) as response:
+                if response.status == 200:
+                    user_data = await response.json()
+                    return user_data.get("login")
+                else:
+                    print(f"获取用户信息失败，状态码: {response.status}")
+                    return None
+    except Exception as e:
+        print(f"获取用户信息时发生错误: {e}")
+        return None
+
+
+# --- 新增 API 端点 ---
+class ClickRecord(BaseModel):
+    repo_name: str
+    release_tag: str
+    release_published_at: str | None = None # 添加发布时间字段
+
+@app.post("/api/record-click")
+async def record_click(record: ClickRecord, request: Request):
+    """记录用户点击 Release 的行为，如果已存在则更新时间，同时记录发布时间"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+
+    user_login = await get_user_login_from_token(access_token)
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Invalid token or failed to fetch user info")
+
+    conn = None
+    try:
+        utc_plus_8 = timezone(timedelta(hours=8))
+        now_utc8 = datetime.now(utc_plus_8)
+        click_time_str = now_utc8.isoformat()
+
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT id FROM user_clicks WHERE user_login = ? AND repo_name = ? AND release_tag = ?",
+            (user_login, record.repo_name, record.release_tag)
+        )
+        existing_record = cursor.fetchone()
+
+        if existing_record:
+            record_id = existing_record[0]
+            cursor.execute(
+                "UPDATE user_clicks SET click_time = ?, release_published_at = ? WHERE id = ?",
+                (click_time_str, record.release_published_at, record_id) # 更新两个字段
+            )
+            print(f"更新点击时间: User={user_login}, Repo={record.repo_name}, Tag={record.release_tag}, Time={click_time_str}")
+        else:
+            cursor.execute(
+                "INSERT INTO user_clicks (user_login, repo_name, release_tag, click_time, release_published_at) VALUES (?, ?, ?, ?, ?)",
+                (user_login, record.repo_name, record.release_tag, click_time_str, record.release_published_at) # 插入新字段
+            )
+            print(f"记录新点击: User={user_login}, Repo={record.repo_name}, Tag={record.release_tag}, Time={click_time_str}")
+
+        conn.commit()
+        return {"status": "success", "message": "Click recorded/updated"}
+    except sqlite3.Error as e:
+        print(f"数据库错误: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+    except Exception as e:
+        print(f"记录点击时发生未知错误: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
+
+@app.get("/api/click-logs")
+async def get_click_logs(
+    request: Request,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100)
+):
+    """获取当前用户的点击日志记录（分页）"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+
+    user_login = await get_user_login_from_token(access_token)
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Invalid token or failed to fetch user info")
+
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        offset = (page - 1) * limit
+
+        cursor.execute("SELECT COUNT(*) FROM user_clicks WHERE user_login = ?", (user_login,))
+        total_count = cursor.fetchone()[0]
+
+        # 查询时包含 release_published_at
+        cursor.execute(
+            "SELECT repo_name, release_tag, click_time, release_published_at FROM user_clicks WHERE user_login = ? ORDER BY click_time DESC LIMIT ? OFFSET ?",
+            (user_login, limit, offset)
+        )
+        logs = cursor.fetchall()
+
+        log_list = [dict(log) for log in logs]
+
+        return {
+            "status": "success",
+            "total": total_count,
+            "page": page,
+            "limit": limit,
+            "logs": log_list
+        }
+
+    except sqlite3.Error as e:
+        print(f"数据库错误: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+    except Exception as e:
+        print(f"获取日志时发生未知错误: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     import uvicorn

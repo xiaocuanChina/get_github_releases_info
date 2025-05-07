@@ -124,6 +124,13 @@
                         class="clickable-tag"
                         @click="goToRelease(log.repo_name, log.release_tag)"
                       >{{ log.release_tag }}</el-tag>
+                      <span 
+                        class="release-time clickable-time"
+                        @click="jumpToNearestTimeInList(log.click_time)"
+                        title="跳转到列表中最接近该时间的项目"
+                      >
+                        {{ formatLogTime(log.click_time) }}
+                      </span>
                     </div>
                   </div>
                 </el-timeline-item>
@@ -438,7 +445,7 @@ export default {
 
   computed: {
     filteredRepos() {
-      let result = this.releases
+      let result = this.releases;
 
       // 先按筛选类型过滤
       if (this.filterType !== 'all') {
@@ -916,7 +923,18 @@ export default {
       }
     },
 
-    // 格式化日志中的点击时间
+    // 处理日志分页改变
+    handleLogsPageChange(newPage) {
+      this.fetchClickLogs(newPage);
+    },
+
+    // 添加：跳转到发布页面
+    goToRelease(repoName, releaseTag) {
+      const releaseUrl = `https://github.com/${repoName}/releases/tag/${releaseTag}`;
+      window.open(releaseUrl, '_blank');
+    },
+
+    // 修改：格式化日志中的点击时间
     formatLogTime(isoString) {
       if (!isoString) return '-';
       try {
@@ -924,6 +942,65 @@ export default {
         return format(date, 'yyyy-MM-dd HH:mm:ss', { locale: zhCN });
       } catch (e) {
         return isoString;
+      }
+    },
+
+    // 跳转到列表中最接近指定时间的项目
+    jumpToNearestTimeInList(targetTimeStr) {
+      if (!targetTimeStr || this.viewMode !== 'list') {
+        return;
+      }
+      
+      try {
+        const targetTime = new Date(targetTimeStr).getTime();
+        
+        // 计算每个项目与目标时间的时间差
+        const timeDistances = this.releases.map((repo, index) => {
+          const repoTime = new Date(repo.latest_release.published_at).getTime();
+          return {
+            index,
+            repoName: repo.repo_name,
+            distance: Math.abs(repoTime - targetTime)
+          };
+        });
+        
+        // 按时间差排序，找出最接近的项目
+        const nearestRepo = timeDistances.sort((a, b) => a.distance - b.distance)[0];
+        
+        if (nearestRepo) {
+          // 计算该项目在哪一页
+          const repoIndex = this.releases.findIndex(r => r.repo_name === nearestRepo.repoName);
+          if (repoIndex === -1) return;
+          
+          // 计算目标页码
+          const targetPage = Math.floor(repoIndex / this.pageSize) + 1;
+          
+          // 先设置当前页
+          this.currentPage = targetPage;
+          
+          // 等待DOM更新后滚动到对应元素
+          this.$nextTick(() => {
+            const element = document.querySelector(`[data-repo-name="${nearestRepo.repoName}"]`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // 添加高亮效果
+              element.classList.add('highlight');
+              setTimeout(() => {
+                element.classList.remove('highlight');
+              }, 2000);
+              
+              // 显示提示消息
+              this.$message({
+                message: `已跳转到最接近该时间的项目: ${nearestRepo.repoName.split('/')[1]}`,
+                type: 'success',
+                duration: 3000
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('跳转到最近时间项目失败:', error);
+        this.$message.error('跳转失败，请重试');
       }
     },
 
@@ -936,17 +1013,6 @@ export default {
       } catch (e) {
         return isoString;
       }
-    },
-
-    // 处理日志分页改变
-    handleLogsPageChange(newPage) {
-      this.fetchClickLogs(newPage);
-    },
-
-    // 添加：跳转到发布页面
-    goToRelease(repoName, releaseTag) {
-      const releaseUrl = `https://github.com/${repoName}/releases/tag/${releaseTag}`;
-      window.open(releaseUrl, '_blank');
     },
 
     // 修改：检查是否为最后活动日期
@@ -1758,5 +1824,19 @@ h2 {
 
 .github-footer a:hover {
   color: #409EFF;
+}
+
+/* 添加可点击时间的样式 */
+.clickable-time {
+  margin-left: 8px;
+  cursor: pointer;
+  color: #909399;
+  font-size: 12px;
+  transition: all 0.3s;
+}
+
+.clickable-time:hover {
+  color: #409EFF;
+  text-decoration: underline;
 }
 </style>

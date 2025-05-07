@@ -10,6 +10,12 @@
           <div class="header-left">
             <div class="title-section">
               <h2>GitHub Starred Releases</h2>
+              <div class="github-link">
+                <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank" title="访问项目GitHub仓库">
+                  <GitHubLogo :size="20" />
+                  <span>项目源码</span>
+                </a>
+              </div>
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
                 <span class="username">{{ userInfo.login }}</span>
@@ -364,6 +370,14 @@
             >
             </el-pagination>
           </div>
+          
+          <!-- 添加GitHub项目链接 -->
+          <div class="github-footer">
+            <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank">
+              <GitHubLogo :size="24" />
+              访问 GitHub 项目仓库
+            </a>
+          </div>
         </div>
       </div>
     </template>
@@ -378,12 +392,14 @@ import DOMPurify from 'dompurify'  // 用于防止 XSS 攻击
 import GitHubLogin from '@/auth/GitHubLogin.vue'  // 修改导入路径
 import { zhCN } from 'date-fns/locale'
 import { API_ENDPOINTS } from '@/api/config'  // 导入 API 配置
+import GitHubLogo from '@/components/GitHubLogo.vue'  // 导入 GitHubLogo 组件
 
 export default {
   name: 'StarredReleases',
 
   components: {
-    'github-login': GitHubLogin  // 确保组件名称匹配模板中使用的名称
+    'github-login': GitHubLogin,  // 确保组件名称匹配模板中使用的名称
+    GitHubLogo  // 确保组件名称匹配模板中使用的名称
   },
 
   data() {
@@ -414,7 +430,7 @@ export default {
       logsLoading: false,
       logsError: null,
       logsCurrentPage: 1,
-      logsPageSize: 15, // 增加每页数量
+      logsPageSize: 6, // 增加每页数量
       logsTotal: 0,
       lastActivityTime: null, // 修改：存储最后活动时间
     }
@@ -1349,6 +1365,29 @@ h2 {
   gap: 8px;
 }
 
+/* GitHub 项目链接样式 */
+.github-link {
+  margin-bottom: 8px;
+}
+
+.github-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #606266;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-size: 14px;
+}
+
+.github-link a:hover {
+  color: #409EFF;
+}
+
+.github-link .el-icon-star-on {
+  color: #F7BA2A;
+}
+
 /* 添加日历视图相关样式 */
 .calendar-card {
   margin-top: 16px;
@@ -1697,5 +1736,27 @@ h2 {
 }
 
 .footprints-header {
+}
+
+/* 添加GitHub项目链接样式 */
+.github-footer {
+  margin-top: 20px;
+  text-align: center;
+  padding: 15px 0;
+  border-top: 1px solid #eee;
+}
+
+.github-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-size: 14px;
+}
+
+.github-footer a:hover {
+  color: #409EFF;
 }
 </style>

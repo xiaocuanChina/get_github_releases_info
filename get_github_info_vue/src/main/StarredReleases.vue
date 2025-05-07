@@ -13,21 +13,62 @@
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
                 <span class="username">{{ userInfo.login }}</span>
-                <!-- <el-button type="text" @click="showLogsDialog" class="logs-button">查看日志</el-button> -->
                 <el-button type="text" @click="handleLogout" class="logout-btn">退出登录</el-button>
               </div>
             </div>
           </div>
           <div class="header-right">
-            <el-radio-group v-model="viewMode" size="small" class="view-mode-group">
-              <el-radio-button label="list">列表视图</el-radio-button>
-              <el-radio-button label="calendar">日历视图</el-radio-button>
-            </el-radio-group>
-            <el-radio-group v-model="filterType" size="small" class="filter-group">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="source">仅源代码</el-radio-button>
-              <el-radio-button label="binary">包含二进制</el-radio-button>
-            </el-radio-group>
+            <div class="view-controls">
+              <el-tooltip content="列表视图" placement="top">
+                <el-button 
+                  :type="viewMode === 'list' ? 'primary' : 'default'" 
+                  circle 
+                  size="small" 
+                  icon="List" 
+                  @click="viewMode = 'list'"
+                ></el-button>
+              </el-tooltip>
+              <el-tooltip content="日历视图" placement="top">
+                <el-button 
+                  :type="viewMode === 'calendar' ? 'primary' : 'default'" 
+                  circle 
+                  size="small" 
+                  icon="Calendar" 
+                  @click="viewMode = 'calendar'"
+                ></el-button>
+              </el-tooltip>
+            </div>
+            
+            <div class="filter-controls">
+              <el-tooltip content="显示全部" placement="top">
+                <el-button 
+                  :type="filterType === 'all' ? 'primary' : 'default'" 
+                  circle 
+                  size="small"
+                  icon="Document" 
+                  @click="filterType = 'all'"
+                ></el-button>
+              </el-tooltip>
+              <el-tooltip content="仅源代码" placement="top">
+                <el-button 
+                  :type="filterType === 'source' ? 'primary' : 'default'" 
+                  circle 
+                  size="small" 
+                  icon="DocumentRemove" 
+                  @click="filterType = 'source'"
+                ></el-button>
+              </el-tooltip>
+              <el-tooltip content="包含二进制" placement="top">
+                <el-button 
+                  :type="filterType === 'binary' ? 'primary' : 'default'" 
+                  circle 
+                  size="small" 
+                  icon="Download" 
+                  @click="filterType = 'binary'"
+                ></el-button>
+              </el-tooltip>
+            </div>
+            
             <div class="refresh-section">
               <el-button
                 type="primary"
@@ -51,272 +92,299 @@
         </div>
       </el-card>
 
-      <!-- 添加日历视图 -->
-      <el-card v-if="viewMode === 'calendar'" class="calendar-card">
-        <el-calendar v-model="calendarDate">
-          <template #header="{ date }">
-            <div class="calendar-header">
-              <span class="current-month">{{ formatCalendarHeader(date) }}</span>
-              <div class="calendar-controls">
-                <el-button-group>
-                  <el-button size="small" @click="handlePrevMonth">上个月</el-button>
-                  <el-button size="small" @click="handleNextMonth">下个月</el-button>
-                </el-button-group>
-                <el-button size="small" type="primary" @click="handleToday">今天</el-button>
+      <!-- 主内容区域使用左右布局 -->
+      <div class="main-content">
+        <!-- 左侧足迹区域 -->
+        <div class="footprints-section">
+          <el-card class="footprints-card">
+            <template #header>
+              <div class="footprints-header">
+                <span>我的足迹</span>
+                <el-button 
+                  type="primary" 
+                  circle 
+                  size="small" 
+                  icon="Refresh" 
+                  @click="fetchClickLogs(1)" 
+                  :loading="logsLoading"
+                  title="刷新足迹"
+                ></el-button>
               </div>
-            </div>
-          </template>
-          <template #dateCell="{ data }">
-            <div class="calendar-cell" :class="{ 'today': isToday(data.day) }">
-              <p :class="{
-                'calendar-day': true,
-                'weekend': isWeekend(data.day),
-                'other-month': !isCurrentMonth(data.day)
-              }">
-                {{ data.day.split('-').slice(-1)[0] }}
-              </p>
-              <div class="releases-summary">
-                <template v-if="getReleasesForDate(data.day).length > 0">
-                  <el-tooltip
-                    v-if="getReleasesForDate(data.day).length === 1"
-                    :content="getReleasesForDate(data.day)[0].repo_name"
-                    placement="top"
-                  >
-                    <a
-                      class="single-release"
-                      :href="getReleasesForDate(data.day)[0].latest_release.html_url"
-                      target="_blank"
-                      @click="recordClick(getReleasesForDate(data.day)[0].repo_name, getReleasesForDate(data.day)[0].latest_release.tag_name, getReleasesForDate(data.day)[0].latest_release.published_at)"
-                    >
-                      {{ getReleasesForDate(data.day)[0].repo_name.split('/')[1] }}
-                      <span class="single-release-version">
-                        {{ getReleasesForDate(data.day)[0].latest_release.tag_name }}
-                        <span v-if="isPreRelease(getReleasesForDate(data.day)[0].latest_release)"
-                              class="pre-badge">预发布</span>
-                      </span>
-                    </a>
-                  </el-tooltip>
-                  <el-popover
-                    v-else
-                    placement="top"
-                    trigger="hover"
-                    :width="280"
-                    popper-class="releases-popover"
-                  >
-                    <template #reference>
-                      <div class="multiple-releases">
-                        {{ getReleasesForDate(data.day).length }} 个更新
-                      </div>
-                    </template>
-                    <div class="releases-list-popup">
-                      <a
-                        v-for="release in getReleasesForDate(data.day)"
-                        :key="release.repo_name"
-                        class="release-item"
-                        target="_blank"
-                        :href="release.latest_release.html_url"
-                        @click="recordClick(release.repo_name, release.latest_release.tag_name, release.latest_release.published_at)"
-                      >
-                        <div class="release-item-content">
-                          <div class="release-main-info">
-                            <span class="repo-name">{{ release.repo_name.split('/')[1] }}</span>
-                            <span class="release-version">
-                              {{ release.latest_release.tag_name }}
-                              <span v-if="isPreRelease(release.latest_release)"
-                                    class="pre-badge">预发布</span>
-                            </span>
-                          </div>
-                          <div class="release-time">{{ formatTime(release.latest_release.published_at) }}</div>
-                        </div>
-                        <a
-                          class="release-detail-link"
-                          :href="release.latest_release.html_url"
-                          target="_blank"
-                        >
-                          查看详情
-                        </a>
+            </template>
+            
+            <div v-if="logsLoading" class="logs-loading">加载中...</div>
+            <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false" />
+            <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有留下任何足迹哦！</div>
+            <div v-else class="footprints-content">
+              <el-timeline>
+                <el-timeline-item
+                  v-for="log in clickLogs"
+                  :key="log.id"
+                  :timestamp="formatLogTime(log.click_time)"
+                  placement="top"
+                  type="primary"
+                >
+                  <div class="footprint-item">
+                    <div class="repo-name">
+                      <a :href="`https://github.com/${log.repo_name}`" target="_blank">
+                        {{ log.repo_name.split('/')[1] }}
                       </a>
                     </div>
-                  </el-popover>
-                </template>
-                <!-- 修改：最后活动提示 -->
-                <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
-                  <el-tooltip content="上次活动" placement="top">
-                    <el-icon><UserFilled /></el-icon>
-                  </el-tooltip>
+                    <div class="release-info">
+                      <el-tag 
+                        size="small" 
+                        type="success" 
+                        class="clickable-tag"
+                        @click="goToRelease(log.repo_name, log.release_tag)"
+                      >{{ log.release_tag }}</el-tag>
+                    </div>
+                  </div>
+                </el-timeline-item>
+              </el-timeline>
+              
+              <!-- 足迹分页器 -->
+              <div v-if="logsTotal > logsPageSize" class="logs-pagination">
+                <el-pagination
+                  small
+                  background
+                  @current-change="handleLogsPageChange"
+                  :current-page="logsCurrentPage"
+                  :page-size="logsPageSize"
+                  layout="prev, pager, next"
+                  :total="logsTotal"
+                >
+                </el-pagination>
+              </div>
+            </div>
+          </el-card>
+        </div>
+        
+        <!-- 右侧主内容区域 -->
+        <div class="main-section">
+          <!-- 添加日历视图 -->
+          <el-card v-if="viewMode === 'calendar'" class="calendar-card">
+            <el-calendar v-model="calendarDate">
+              <template #header="{ date }">
+                <div class="calendar-header">
+                  <span class="current-month">{{ formatCalendarHeader(date) }}</span>
+                  <div class="calendar-controls">
+                    <el-button-group>
+                      <el-button size="small" @click="handlePrevMonth">上个月</el-button>
+                      <el-button size="small" @click="handleNextMonth">下个月</el-button>
+                    </el-button-group>
+                    <el-button size="small" type="primary" @click="handleToday">今天</el-button>
+                  </div>
+                </div>
+              </template>
+              <template #dateCell="{ data }">
+                <div class="calendar-cell" :class="{ 'today': isToday(data.day) }">
+                  <p :class="{
+                    'calendar-day': true,
+                    'weekend': isWeekend(data.day),
+                    'other-month': !isCurrentMonth(data.day)
+                  }">
+                    {{ data.day.split('-').slice(-1)[0] }}
+                  </p>
+                  <div class="releases-summary">
+                    <template v-if="getReleasesForDate(data.day).length > 0">
+                      <el-tooltip
+                        v-if="getReleasesForDate(data.day).length === 1"
+                        :content="getReleasesForDate(data.day)[0].repo_name"
+                        placement="top"
+                      >
+                        <a
+                          class="single-release"
+                          :href="getReleasesForDate(data.day)[0].latest_release.html_url"
+                          target="_blank"
+                          @click="recordClick(getReleasesForDate(data.day)[0].repo_name, getReleasesForDate(data.day)[0].latest_release.tag_name, getReleasesForDate(data.day)[0].latest_release.published_at)"
+                        >
+                          {{ getReleasesForDate(data.day)[0].repo_name.split('/')[1] }}
+                          <span class="single-release-version">
+                            {{ getReleasesForDate(data.day)[0].latest_release.tag_name }}
+                            <span v-if="isPreRelease(getReleasesForDate(data.day)[0].latest_release)"
+                                  class="pre-badge">预发布</span>
+                          </span>
+                        </a>
+                      </el-tooltip>
+                      <el-popover
+                        v-else
+                        placement="top"
+                        trigger="hover"
+                        :width="280"
+                        popper-class="releases-popover"
+                      >
+                        <template #reference>
+                          <div class="multiple-releases">
+                            {{ getReleasesForDate(data.day).length }} 个更新
+                          </div>
+                        </template>
+                        <div class="releases-list-popup">
+                          <a
+                            v-for="release in getReleasesForDate(data.day)"
+                            :key="release.repo_name"
+                            class="release-item"
+                            target="_blank"
+                            :href="release.latest_release.html_url"
+                            @click="recordClick(release.repo_name, release.latest_release.tag_name, release.latest_release.published_at)"
+                          >
+                            <div class="release-item-content">
+                              <div class="release-main-info">
+                                <span class="repo-name">{{ release.repo_name.split('/')[1] }}</span>
+                                <span class="release-version">
+                                  {{ release.latest_release.tag_name }}
+                                  <span v-if="isPreRelease(release.latest_release)"
+                                        class="pre-badge">预发布</span>
+                                </span>
+                              </div>
+                              <div class="release-time">{{ formatTime(release.latest_release.published_at) }}</div>
+                            </div>
+                            <a
+                              class="release-detail-link"
+                              :href="release.latest_release.html_url"
+                              target="_blank"
+                            >
+                              查看详情
+                            </a>
+                          </a>
+                        </div>
+                      </el-popover>
+                    </template>
+                    <!-- 修改：最后活动提示 -->
+                    <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
+                      <el-tooltip content="上次活动" placement="top">
+                        <el-icon><UserFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </el-calendar>
+          </el-card>
+
+          <el-card v-if="error" class="error-card">
+            <el-alert
+                :title="error"
+                type="error"
+                show-icon
+            />
+          </el-card>
+
+          <!-- 搜索框 -->
+          <el-input
+              v-model="searchQuery"
+              placeholder="搜索仓库..."
+              prefix-icon="el-icon-search"
+              clearable
+              class="search-input"
+          />
+
+          <!-- 仓库列表 -->
+          <div class="releases-list">
+            <el-card
+              v-for="repo in paginatedRepos"
+              :key="repo.repo_name"
+              :data-repo-name="repo.repo_name"
+              class="repo-card"
+            >
+              <div class="repo-header">
+                <div class="repo-title">
+                  <img
+                    v-if="repo.avatar_url"
+                    :src="repo.avatar_url"
+                    class="repo-avatar"
+                    :alt="repo.repo_name"
+                  />
+                  <div class="repo-info">
+                    <h3>
+                      <a
+                        :href="'https://github.com/' + repo.repo_name"
+                        target="_blank"
+                        @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                      >
+                        {{ repo.repo_name }}
+                      </a>
+                    </h3>
+                    <p v-if="repo.description" class="repo-description">
+                      {{ repo.description }}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </template>
-        </el-calendar>
-      </el-card>
 
-      <el-card v-if="error" class="error-card">
-        <el-alert
-            :title="error"
-            type="error"
-            show-icon
-        />
-      </el-card>
-
-      <!-- 搜索框 -->
-      <el-input
-          v-model="searchQuery"
-          placeholder="搜索仓库..."
-          prefix-icon="el-icon-search"
-          clearable
-          class="search-input"
-      />
-
-      <!-- 仓库列表 -->
-      <div class="releases-list">
-        <el-card
-          v-for="repo in paginatedRepos"
-          :key="repo.repo_name"
-          :data-repo-name="repo.repo_name"
-          class="repo-card"
-        >
-          <div class="repo-header">
-            <div class="repo-title">
-              <img
-                v-if="repo.avatar_url"
-                :src="repo.avatar_url"
-                class="repo-avatar"
-                :alt="repo.repo_name"
-              />
-              <div class="repo-info">
-                <h3>
-                  <a
-                    :href="'https://github.com/' + repo.repo_name"
-                    target="_blank"
-                    @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+              <div class="release-content">
+                <h4>
+                  <div class="release-info-left">
+                    <a
+                      :href="repo.latest_release.html_url"
+                      target="_blank"
+                      @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                    >
+                      {{ repo.latest_release.name || repo.latest_release.tag_name }}
+                    </a>
+                    <el-tag
+                      v-if="isPreRelease(repo.latest_release)"
+                      size="small"
+                      type="warning"
+                      class="release-type-tag"
+                    >
+                      预发布
+                    </el-tag>
+                    <el-tag
+                      v-else
+                      size="small"
+                      type="success"
+                      class="release-type-tag"
+                    >
+                      正式版
+                    </el-tag>
+                  </div>
+                  <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
+                </h4>
+                <div v-if="isSourceCodeOnly(repo.latest_release)" class="source-code-notice">
+                  <el-tag size="small" type="info">仅包含源代码</el-tag>
+                </div>
+                <div class="markdown-wrapper" v-if="repo.latest_release.body">
+                  <div
+                    class="markdown-body"
+                    :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
+                    v-html="renderMarkdown(repo.latest_release.body)"
+                  ></div>
+                  <div
+                    class="expand-button"
+                    v-if="needsExpansion(repo.latest_release.body)"
+                    @click="toggleExpand(repo.repo_name)"
                   >
-                    {{ repo.repo_name }}
-                  </a>
-                </h3>
-                <p v-if="repo.description" class="repo-description">
-                  {{ repo.description }}
-                </p>
+                    {{ expandedRepos.includes(repo.repo_name) ? '收起' : '展开' }}
+                  </div>
+                </div>
+                <div class="release-footer">
+                  <el-button
+                    type="text"
+                    @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                  >
+                    查看所有版本
+                  </el-button>
+                </div>
               </div>
-            </div>
+            </el-card>
           </div>
 
-          <div class="release-content">
-            <h4>
-              <div class="release-info-left">
-                <a
-                  :href="repo.latest_release.html_url"
-                  target="_blank"
-                  @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
-                >
-                  {{ repo.latest_release.name || repo.latest_release.tag_name }}
-                </a>
-                <el-tag
-                  v-if="isPreRelease(repo.latest_release)"
-                  size="small"
-                  type="warning"
-                  class="release-type-tag"
-                >
-                  预发布
-                </el-tag>
-                <el-tag
-                  v-else
-                  size="small"
-                  type="success"
-                  class="release-type-tag"
-                >
-                  正式版
-                </el-tag>
-              </div>
-              <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
-            </h4>
-            <div v-if="isSourceCodeOnly(repo.latest_release)" class="source-code-notice">
-              <el-tag size="small" type="info">仅包含源代码</el-tag>
-            </div>
-            <div class="markdown-wrapper" v-if="repo.latest_release.body">
-              <div
-                class="markdown-body"
-                :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
-                v-html="renderMarkdown(repo.latest_release.body)"
-              ></div>
-              <div
-                class="expand-button"
-                v-if="needsExpansion(repo.latest_release.body)"
-                @click="toggleExpand(repo.repo_name)"
-              >
-                {{ expandedRepos.includes(repo.repo_name) ? '收起' : '展开' }}
-              </div>
-            </div>
-            <div class="release-footer">
-              <el-button
-                type="text"
-                @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
-              >
-                查看所有版本
-              </el-button>
-            </div>
-          </div>
-        </el-card>
-      </div>
-
-      <!-- 分页器 -->
-      <div class="pagination-container">
-        <el-pagination
-          background
-          @size-change="handleSizeChange"
-          @current-change="handleCurrentChange"
-          :current-page="currentPage"
-          :page-sizes="[10, 20, 50, 100]"
-          :page-size="pageSize"
-          layout="total, sizes, prev, pager, next, jumper"
-          :total="filteredRepos.length"
-        >
-        </el-pagination>
-      </div>
-
-      <!-- 新增：日志弹窗 -->
-      <el-dialog
-        title="最近点击记录"
-        v-model="logsDialogVisible"
-        width="70%"
-        top="5vh"
-      >
-        <div v-if="logsLoading" class="logs-loading">加载中...</div>
-        <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false" />
-        <div v-else-if="clickLogs.length === 0" class="logs-empty">暂无记录</div>
-        <div v-else>
-          <el-table :data="clickLogs" stripe style="width: 100%" size="small" height="calc(80vh - 150px)">
-            <el-table-column prop="repo_name" label="仓库" min-width="200" show-overflow-tooltip></el-table-column>
-            <el-table-column prop="release_tag" label="版本标签" min-width="150" show-overflow-tooltip></el-table-column>
-            <el-table-column label="版本发布时间" min-width="170">
-              <template #default="scope">
-                <span>{{ formatReleaseTime(scope.row.release_published_at) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="最近点击时间" min-width="170">
-              <template #default="scope">
-                <span>{{ formatLogTime(scope.row.click_time) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="logs-pagination-container" v-if="logsTotal > logsPageSize">
+          <!-- 分页器 -->
+          <div class="pagination-container">
             <el-pagination
               background
-              small
-              @current-change="handleLogsPageChange"
-              :current-page="logsCurrentPage"
-              :page-size="logsPageSize"
-              layout="total, prev, pager, next"
-              :total="logsTotal"
+              @size-change="handleSizeChange"
+              @current-change="handleCurrentChange"
+              :current-page="currentPage"
+              :page-sizes="[10, 20, 50, 100]"
+              :page-size="pageSize"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="filteredRepos.length"
             >
             </el-pagination>
           </div>
         </div>
-        <template #footer>
-          <el-button @click="logsDialogVisible = false">关闭</el-button>
-          <el-button type="primary" @click="fetchClickLogs(1)" :loading="logsLoading">刷新</el-button>
-        </template>
-      </el-dialog>
+      </div>
     </template>
   </div>
 </template>
@@ -367,7 +435,6 @@ export default {
       logsCurrentPage: 1,
       logsPageSize: 15, // 增加每页数量
       logsTotal: 0,
-      logsDialogVisible: false, // 控制日志弹窗
       lastActivityTime: null, // 修改：存储最后活动时间
     }
   },
@@ -821,21 +888,10 @@ export default {
       }
     },
 
-    // 新增：显示日志弹窗的方法
-    async showLogsDialog() {
-      console.log('showLogsDialog method called');
-      this.logsDialogVisible = true;
-      await this.$nextTick(); // 等待 DOM 更新
-      console.log('logsDialogVisible 状态:', this.logsDialogVisible); // 确认状态
-      // 首次打开、日志为空且不在加载中时加载
-      if (this.clickLogs.length === 0 && !this.logsLoading) {
-          this.fetchClickLogs(1);
-      }
-    },
-
-    // 获取点击日志 (参数和错误处理不变，只是调用的地方变了)
+    // 获取点击日志
     async fetchClickLogs(page = 1) {
       if (!this.accessToken) return;
+      console.log(`[fetchClickLogs] Attempting to fetch logs for page: ${page}`);
       this.logsLoading = true;
       this.logsError = null;
       this.logsCurrentPage = page;
@@ -844,9 +900,11 @@ export default {
           headers: { Authorization: `Bearer ${this.accessToken}` },
           params: { page: this.logsCurrentPage, limit: this.logsPageSize }
         });
+        console.log('[fetchClickLogs] Raw API Response:', response);
         if (response.data.status === 'success') {
           this.clickLogs = response.data.logs;
           this.logsTotal = response.data.total;
+          console.log('[fetchClickLogs] Processed clickLogs:', JSON.parse(JSON.stringify(this.clickLogs)), 'Total logs:', this.logsTotal);
         } else {
           throw new Error(response.data.message || '获取日志失败');
         }
@@ -857,6 +915,7 @@ export default {
         this.logsTotal = 0;
       } finally {
         this.logsLoading = false;
+        console.log('[fetchClickLogs] Finished fetching logs. Loading state:', this.logsLoading);
       }
     },
 
@@ -887,6 +946,12 @@ export default {
       this.fetchClickLogs(newPage);
     },
 
+    // 添加：跳转到发布页面
+    goToRelease(repoName, releaseTag) {
+      const releaseUrl = `https://github.com/${repoName}/releases/tag/${releaseTag}`;
+      window.open(releaseUrl, '_blank');
+    },
+
     // 修改：检查是否为最后活动日期
     isLastActivityDate(dateString) {
       if (!this.lastActivityTime) return false;
@@ -913,6 +978,8 @@ export default {
       const isAuthenticated = await this.checkAuthStatus()
       if (isAuthenticated) {
         await this.fetchReleases()
+        // 添加：自动加载足迹数据
+        this.fetchClickLogs(1)
       }
     }
   },
@@ -930,7 +997,7 @@ export default {
 
 <style scoped>
 .releases-container {
-  max-width: 1200px;
+  max-width: 1600px; /* 进一步增加页面宽度 */
   margin: 0 auto;
   padding: 20px;
 }
@@ -956,6 +1023,104 @@ export default {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+/* 主内容区域左右布局 */
+.main-content {
+  display: flex;
+  gap: 20px;
+}
+
+/* 左侧足迹区域 */
+.footprints-section {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+.footprints-card {
+  position: sticky;
+  top: 20px;
+}
+
+.footprints-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footprints-content {
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.footprint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footprint-item .repo-name a {
+  color: #303133;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.footprint-item .repo-name a:hover {
+  color: #409EFF;
+  text-decoration: underline;
+}
+
+.release-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logs-empty, .logs-loading {
+  padding: 20px 0;
+  text-align: center;
+  color: #909399;
+}
+
+.logs-pagination {
+  margin-top: 15px;
+  display: flex;
+  justify-content: center;
+}
+
+/* 美化时间线组件 */
+:deep(.el-timeline-item__content) {
+  margin-left: 20px;
+}
+
+:deep(.el-timeline-item__timestamp) {
+  font-size: 12px;
+  color: #909399;
+}
+
+:deep(.el-timeline-item__node--primary) {
+  background-color: #409EFF;
+}
+
+/* 美化滚动条 */
+.footprints-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.footprints-content::-webkit-scrollbar-thumb {
+  background-color: #E4E7ED;
+  border-radius: 2px;
+}
+
+.footprints-content::-webkit-scrollbar-track {
+  background-color: #F5F7FA;
+}
+
+/* 右侧内容区域 */
+.main-section {
+  flex: 1;
+  min-width: 0; /* 防止溢出 */
 }
 
 .search-input {
@@ -1447,30 +1612,6 @@ h2 {
   gap: 8px; /* 在链接和标签之间添加一些间距 */
 }
 
-/* 新增日志按钮样式 */
-.logs-button {
-  margin-left: 10px; /* 调整与其他按钮的间距 */
-  padding: 0 5px; /* 微调内边距 */
-  color: #409EFF; /* 保持链接颜色 */
-}
-.logs-button:hover {
-  color: #66b1ff;
-}
-
-/* 弹窗内分页器样式 */
-.logs-pagination-container {
-  margin-top: 15px;
-  text-align: right; /* 改为右对齐 */
-}
-
-/* 弹窗内加载/空状态 */
-.logs-loading,
-.logs-empty {
-  text-align: center;
-  color: #909399;
-  padding: 40px 0;
-}
-
 /* 修改：最后活动日期指示器样式 */
 .last-activity-indicator {
   position: absolute;
@@ -1481,9 +1622,36 @@ h2 {
   cursor: help;
 }
 
-/* 可以给弹窗的表格设置一个最大高度，使其可滚动 */
-:deep(.el-dialog__body) {
-  padding-top: 10px;
-  padding-bottom: 10px;
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .main-content {
+    flex-direction: column;
+  }
+  
+  .footprints-section {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+  
+  .footprints-content {
+    max-height: 400px;
+  }
+}
+
+/* 添加可点击标签的样式 */
+.clickable-tag {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clickable-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 控件组样式 */
+.view-controls, .filter-controls {
+  display: flex;
+  gap: 8px;
 }
 </style>

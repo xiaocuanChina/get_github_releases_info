@@ -691,9 +691,9 @@ async def get_click_logs(
         cursor.execute("SELECT COUNT(*) FROM user_clicks WHERE user_login = ?", (user_login,))
         total_count = cursor.fetchone()[0]
 
-        # 查询时包含 release_published_at
+        # 查询时包含 release_published_at 和 id
         cursor.execute(
-            "SELECT repo_name, release_tag, click_time, release_published_at FROM user_clicks WHERE user_login = ? ORDER BY click_time DESC LIMIT ? OFFSET ?",
+            "SELECT id, repo_name, release_tag, click_time, release_published_at FROM user_clicks WHERE user_login = ? ORDER BY click_time DESC LIMIT ? OFFSET ?",
             (user_login, limit, offset)
         )
         logs = cursor.fetchall()

@@ -28,7 +28,7 @@ app = FastAPI()
 # 配置 CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"],  # Vue 开发服务器地址
+    allow_origins=["*"],  # 修改这里，暂时允许所有源进行测试
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -53,6 +53,7 @@ def init_db():
     """初始化数据库，创建表"""
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
+    # 创建用户点击表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_clicks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,7 +61,7 @@ def init_db():
             repo_name TEXT NOT NULL,
             release_tag TEXT NOT NULL,
             click_time TEXT NOT NULL,
-            release_published_at TEXT NULL -- 新增字段，允许为空以兼容旧记录（如果保留旧DB）
+            release_published_at TEXT NULL
         )
     ''')
     conn.commit()
@@ -209,6 +210,8 @@ async def github_callback(code: str):
         # 创建带有超时和代理的会话
         timeout = aiohttp.ClientTimeout(total=30)  # 30秒超时
         conn = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
+
+        access_token = None # 初始化 access_token
 
         async with aiohttp.ClientSession(timeout=timeout, connector=conn) as session:
             print(f"收到授权码: {code[:5]}...")
@@ -397,15 +400,22 @@ async def verify_token(request: Request):
             ) as response:
                 if response.status == 200:
                     user_data = await response.json()
+                    user_login = user_data["login"]
+
+                    # --- 修改：查询最后活动时间 ---
+                    last_activity_time = get_user_last_activity(user_login)
+
                     return {
                         "status": "success",
                         "user": {
-                            "login": user_data["login"],
+                            "login": user_login,
                             "avatar_url": user_data["avatar_url"],
                             "name": user_data.get("name"),
-                            "email": user_data.get("email")
+                            "email": user_data.get("email"),
+                            "last_activity_time": last_activity_time # 使用最后活动时间
                         }
                     }
+                    # --- 结束修改 ---
                 else:
                     raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
@@ -540,34 +550,58 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
     )
 
 
-async def get_user_login_from_token(access_token: str) -> str | None:
-    """根据 token 获取 GitHub 用户登录名"""
+async def get_user_info_from_token(session: aiohttp.ClientSession, access_token: str) -> Dict | None:
+    """根据 token 获取 GitHub 用户基本信息"""
     try:
-        # 创建带有SSL上下文和代理的aiohttp会话
-        ssl_context = ssl.create_default_context(cafile=certifi.where())
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        timeout = aiohttp.ClientTimeout(total=30)
-
-        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-            async with session.get(
-                    "https://api.github.com/user",
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Accept": "application/vnd.github.v3+json",
-                        "User-Agent": "GitHub-Starred-Releases-App" # 添加 User-Agent
-                    },
-                    proxy=PROXY_URL # 使用代理
-            ) as response:
-                if response.status == 200:
-                    user_data = await response.json()
-                    return user_data.get("login")
-                else:
-                    print(f"获取用户信息失败，状态码: {response.status}")
-                    return None
+        async with session.get(
+                "https://api.github.com/user",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "GitHub-Starred-Releases-App"
+                },
+                proxy=PROXY_URL
+        ) as response:
+            if response.status == 200:
+                user_data = await response.json()
+                return user_data # 返回整个用户信息字典
+            else:
+                print(f"获取用户信息失败，状态码: {response.status}")
+                return None
     except Exception as e:
         print(f"获取用户信息时发生错误: {e}")
         return None
 
+async def get_user_login_from_token(access_token: str) -> str | None:
+    """辅助函数：根据 token 获取用户登录名"""
+    # create_client_session() 会创建一个新的会话
+    # 如果您希望在应用级别重用会话，请考虑不同的会话管理策略
+    async with await create_client_session() as session:
+        user_data = await get_user_info_from_token(session, access_token)
+        if user_data and "login" in user_data:
+            return user_data["login"]
+    return None
+
+def get_user_last_activity(login: str) -> str | None:
+    """从数据库获取用户的最后一次点击时间（作为最后活动时间）"""
+    conn = None
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        cursor = conn.cursor()
+        # 查询该用户最大的 click_time
+        cursor.execute("SELECT MAX(click_time) FROM user_clicks WHERE user_login = ?", (login,))
+        result = cursor.fetchone()
+        # fetchone() 返回一个元组，即使只有一列。如果没找到记录，返回 (None,)
+        return result[0] if result and result[0] is not None else None
+    except sqlite3.Error as e:
+        print(f"数据库错误 (get_user_last_activity): {e}")
+        return None
+    except Exception as e:
+        print(f"获取最后活动时间时发生未知错误: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
 
 # --- 新增 API 端点 ---
 class ClickRecord(BaseModel):

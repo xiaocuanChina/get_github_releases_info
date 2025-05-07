@@ -13,7 +13,7 @@
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
                 <span class="username">{{ userInfo.login }}</span>
-                <el-button type="text" @click="showLogsDialog" class="logs-button">查看日志</el-button>
+                <!-- <el-button type="text" @click="showLogsDialog" class="logs-button">查看日志</el-button> -->
                 <el-button type="text" @click="handleLogout" class="logout-btn">退出登录</el-button>
               </div>
             </div>
@@ -139,6 +139,12 @@
                     </div>
                   </el-popover>
                 </template>
+                <!-- 修改：最后活动提示 -->
+                <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
+                  <el-tooltip content="上次活动" placement="top">
+                    <el-icon><UserFilled /></el-icon>
+                  </el-tooltip>
+                </div>
               </div>
             </div>
           </template>
@@ -362,6 +368,7 @@ export default {
       logsPageSize: 15, // 增加每页数量
       logsTotal: 0,
       logsDialogVisible: false, // 控制日志弹窗
+      lastActivityTime: null, // 修改：存储最后活动时间
     }
   },
 
@@ -412,6 +419,11 @@ export default {
           }
         })
         this.userInfo = response.data
+        // 注意：此处的 /user 端点通常不直接返回聚合的活动时间，
+        // verify 端点是获取这个信息的地方。checkAuthStatus 已处理。
+        // 如果确实需要在这里也获取，需要确认 /user 端点是否也返回了。
+        // 暂时注释掉，依赖 checkAuthStatus 的设置
+        // this.lastActivityTime = response.data.last_activity_time
       } catch (error) {
         console.error('获取用户信息失败:', error)
       }
@@ -452,6 +464,7 @@ export default {
             this.accessToken = storedToken
             this.isAuthenticated = true
             this.userInfo = response.data.user
+            this.lastActivityTime = response.data.user.last_activity_time // 修改：存储最后活动时间
 
             // 检查是否需要重新获取数据
             const now = new Date().getTime()
@@ -809,10 +822,13 @@ export default {
     },
 
     // 新增：显示日志弹窗的方法
-    showLogsDialog() {
+    async showLogsDialog() {
+      console.log('showLogsDialog method called');
       this.logsDialogVisible = true;
-      // 首次打开或日志为空时加载
-      if (this.clickLogs.length === 0) {
+      await this.$nextTick(); // 等待 DOM 更新
+      console.log('logsDialogVisible 状态:', this.logsDialogVisible); // 确认状态
+      // 首次打开、日志为空且不在加载中时加载
+      if (this.clickLogs.length === 0 && !this.logsLoading) {
           this.fetchClickLogs(1);
       }
     },
@@ -869,6 +885,19 @@ export default {
     // 处理日志分页改变
     handleLogsPageChange(newPage) {
       this.fetchClickLogs(newPage);
+    },
+
+    // 修改：检查是否为最后活动日期
+    isLastActivityDate(dateString) {
+      if (!this.lastActivityTime) return false;
+      try {
+        // click_time 存储的是带时区的 ISO 格式，直接转 Date 对象比较日期部分
+        const activityDate = format(new Date(this.lastActivityTime), 'yyyy-MM-dd');
+        return activityDate === dateString;
+      } catch (e) {
+        console.error("解析最后活动时间失败:", e);
+        return false;
+      }
     },
   },
 
@@ -1440,6 +1469,16 @@ h2 {
   text-align: center;
   color: #909399;
   padding: 40px 0;
+}
+
+/* 修改：最后活动日期指示器样式 */
+.last-activity-indicator {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: #E6A23C; /* 使用一个醒目的颜色 */
+  font-size: 14px;
+  cursor: help;
 }
 
 /* 可以给弹窗的表格设置一个最大高度，使其可滚动 */

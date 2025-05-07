@@ -124,13 +124,6 @@
                         class="clickable-tag"
                         @click="goToRelease(log.repo_name, log.release_tag)"
                       >{{ log.release_tag }}</el-tag>
-                      <span 
-                        class="release-time clickable-time"
-                        @click="jumpToNearestTimeInList(log.click_time)"
-                        title="跳转到列表中最接近该时间的项目"
-                      >
-                        {{ formatLogTime(log.click_time) }}
-                      </span>
                     </div>
                   </div>
                 </el-timeline-item>
@@ -1003,7 +996,40 @@ export default {
         this.$message.error('跳转失败，请重试');
       }
     },
-
+    
+    // 为时间轴时间戳添加点击事件处理器
+    addTimelineClickHandlers() {
+      // 获取所有时间轴时间戳元素
+      const timestamps = document.querySelectorAll('.footprints-section .el-timeline-item__timestamp')
+      
+      timestamps.forEach(el => {
+        // 移除旧的事件监听器（避免重复添加）
+        el.removeEventListener('click', this.handleTimeStampClick)
+        
+        // 添加新的点击样式和事件监听器
+        el.classList.add('timeline-timestamp-clickable')
+        el.setAttribute('title', '点击跳转到列表中最接近该时间的项目')
+        
+        // 为每个时间戳绑定点击事件
+        el.addEventListener('click', this.handleTimeStampClick)
+      })
+    },
+    
+    // 处理时间戳点击事件
+    handleTimeStampClick(event) {
+      // 获取对应的日志项（通过DOM关系查找）
+      const timelineItem = event.target.closest('.el-timeline-item')
+      if (!timelineItem) return
+      
+      // 获取日志项索引
+      const index = Array.from(timelineItem.parentNode.children).indexOf(timelineItem)
+      if (index === -1 || index >= this.clickLogs.length) return
+      
+      // 获取对应的日志数据并跳转
+      const log = this.clickLogs[index]
+      this.jumpToNearestTimeInList(log.click_time)
+    },
+    
     // 新增：格式化日志中的发布时间
     formatReleaseTime(isoString) {
       if (!isoString) return '-';
@@ -1043,8 +1069,20 @@ export default {
         await this.fetchReleases()
         // 添加：自动加载足迹数据
         this.fetchClickLogs(1)
+        
+        // 为时间轴时间戳添加点击事件
+        this.$nextTick(() => {
+          this.addTimelineClickHandlers()
+        })
       }
     }
+  },
+
+  updated() {
+    // 在组件更新后重新添加事件监听器
+    this.$nextTick(() => {
+      this.addTimelineClickHandlers()
+    })
   },
 
   watch: {
@@ -1115,7 +1153,10 @@ export default {
   max-height: calc(100vh - 250px);
   overflow-y: auto;
   padding-right: 10px;
+  position: relative;
 }
+
+
 
 .footprint-item {
   display: flex;
@@ -1838,5 +1879,64 @@ h2 {
 .clickable-time:hover {
   color: #409EFF;
   text-decoration: underline;
+}
+
+/* 时间跳转按钮样式 */
+.time-jump-btn {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  color: #909399;
+  transition: all 0.3s;
+}
+
+.time-jump-btn:hover {
+  color: #409EFF;
+}
+
+.time-jump-btn span {
+  font-size: 12px;
+}
+
+/* 为时间轴时间戳添加可点击样式 */
+:deep(.timeline-timestamp-clickable) {
+  cursor: pointer !important;
+  transition: all 0.3s;
+  position: relative;
+  display: inline-block !important;
+}
+
+:deep(.timeline-timestamp-clickable:hover) {
+  color: #409EFF !important;
+  text-decoration: underline;
+}
+
+:deep(.timeline-timestamp-clickable::after) {
+  content: none; /* 移除箭头图标 */
+}
+
+:deep(.timeline-timestamp-clickable:hover::after) {
+  opacity: 1;
+  color: #409EFF;
+}
+
+/* 修改时间轴样式，让内容更紧凑 */
+:deep(.el-timeline-item__wrapper) {
+  padding-left: 24px;
+}
+
+:deep(.el-timeline-item__timestamp) {
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+:deep(.el-timeline-item__tail) {
+  left: 6px;
+}
+
+:deep(.el-timeline-item__node) {
+  left: 6px;
 }
 </style>

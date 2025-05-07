@@ -20,55 +20,35 @@
           <div class="header-right">
             <div class="view-controls">
               <el-tooltip content="列表视图" placement="top">
-                <el-button 
-                  :type="viewMode === 'list' ? 'primary' : 'default'" 
-                  circle 
-                  size="small" 
-                  icon="List" 
-                  @click="viewMode = 'list'"
-                ></el-button>
+                <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+                  <AppIcon name="tickets" />
+                </div>
               </el-tooltip>
               <el-tooltip content="日历视图" placement="top">
-                <el-button 
-                  :type="viewMode === 'calendar' ? 'primary' : 'default'" 
-                  circle 
-                  size="small" 
-                  icon="Calendar" 
-                  @click="viewMode = 'calendar'"
-                ></el-button>
+                <div class="icon-button" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
+                  <AppIcon name="date" />
+                </div>
               </el-tooltip>
             </div>
-            
+
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
-                <el-button 
-                  :type="filterType === 'all' ? 'primary' : 'default'" 
-                  circle 
-                  size="small"
-                  icon="Document" 
-                  @click="filterType = 'all'"
-                ></el-button>
+                <div class="icon-button" :class="{ active: filterType === 'all' }" @click="filterType = 'all'">
+                  <AppIcon name="document" />
+                </div>
               </el-tooltip>
-              <el-tooltip content="仅源代码" placement="top">
-                <el-button 
-                  :type="filterType === 'source' ? 'primary' : 'default'" 
-                  circle 
-                  size="small" 
-                  icon="DocumentRemove" 
-                  @click="filterType = 'source'"
-                ></el-button>
+              <el-tooltip content="仅源代码（无下载内容）" placement="top">
+                <div class="icon-button" :class="{ active: filterType === 'source' }" @click="filterType = 'source'">
+                  <AppIcon name="document-delete" />
+                </div>
               </el-tooltip>
               <el-tooltip content="包含二进制" placement="top">
-                <el-button 
-                  :type="filterType === 'binary' ? 'primary' : 'default'" 
-                  circle 
-                  size="small" 
-                  icon="Download" 
-                  @click="filterType = 'binary'"
-                ></el-button>
+                <div class="icon-button" :class="{ active: filterType === 'binary' }" @click="filterType = 'binary'">
+                  <AppIcon name="download" />
+                </div>
               </el-tooltip>
             </div>
-            
+
             <div class="refresh-section">
               <el-button
                 type="primary"
@@ -100,18 +80,19 @@
             <template #header>
               <div class="footprints-header">
                 <span>我的足迹</span>
-                <el-button 
-                  type="primary" 
-                  circle 
-                  size="small" 
-                  icon="Refresh" 
-                  @click="fetchClickLogs(1)" 
-                  :loading="logsLoading"
-                  title="刷新足迹"
-                ></el-button>
+                <el-tooltip content="刷新足迹" placement="top">
+                  <div
+                    class="icon-button refresh-icon"
+                    :class="{ 'is-loading': logsLoading }"
+                    @click="fetchClickLogs(1)"
+                  >
+                    <AppIcon name="refresh" />
+                    <span v-if="logsLoading" class="loading-indicator"></span>
+                  </div>
+                </el-tooltip>
               </div>
             </template>
-            
+
             <div v-if="logsLoading" class="logs-loading">加载中...</div>
             <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false" />
             <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有留下任何足迹哦！</div>
@@ -131,9 +112,9 @@
                       </a>
                     </div>
                     <div class="release-info">
-                      <el-tag 
-                        size="small" 
-                        type="success" 
+                      <el-tag
+                        size="small"
+                        type="success"
                         class="clickable-tag"
                         @click="goToRelease(log.repo_name, log.release_tag)"
                       >{{ log.release_tag }}</el-tag>
@@ -141,7 +122,7 @@
                   </div>
                 </el-timeline-item>
               </el-timeline>
-              
+
               <!-- 足迹分页器 -->
               <div v-if="logsTotal > logsPageSize" class="logs-pagination">
                 <el-pagination
@@ -158,7 +139,7 @@
             </div>
           </el-card>
         </div>
-        
+
         <!-- 右侧主内容区域 -->
         <div class="main-section">
           <!-- 添加日历视图 -->
@@ -252,7 +233,7 @@
                     <!-- 修改：最后活动提示 -->
                     <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
                       <el-tooltip content="上次活动" placement="top">
-                        <el-icon><UserFilled /></el-icon>
+                        <AppIcon name="user" />
                       </el-tooltip>
                     </div>
                   </div>
@@ -1627,12 +1608,12 @@ h2 {
   .main-content {
     flex-direction: column;
   }
-  
+
   .footprints-section {
     width: 100%;
     margin-bottom: 20px;
   }
-  
+
   .footprints-content {
     max-height: 400px;
   }
@@ -1653,5 +1634,68 @@ h2 {
 .view-controls, .filter-controls {
   display: flex;
   gap: 8px;
+}
+
+/* 图标按钮样式 */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #f5f7fa;
+  color: #606266;
+}
+
+.icon-button:hover {
+  background-color: #e6e9ed;
+  transform: translateY(-2px);
+}
+
+.icon-button.active {
+  background-color: #409EFF;
+  color: white;
+}
+
+.icon-button .el-icon {
+  font-size: 16px;
+}
+
+.refresh-section {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 120px; /* 固定宽度 */
+}
+
+.refresh-button {
+  width: 100%;
+}
+
+.refresh-progress {
+  margin-top: 4px;
+  width: 100%;
+}
+
+/* 刷新图标特殊样式 */
+.refresh-icon.is-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.refresh-icon.is-loading .el-icon {
+  animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.footprints-header {
 }
 </style>

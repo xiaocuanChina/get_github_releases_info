@@ -18,7 +18,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 右侧：刷新按钮 -->
           <div class="header-right">
             <div class="refresh-section">
@@ -55,7 +55,7 @@
             clearable
             class="search-input"
         />
-        
+
         <!-- 控件区域 -->
         <div class="view-filter-controls">
           <div class="control-group">
@@ -73,7 +73,7 @@
               </el-tooltip>
             </div>
           </div>
-          
+
           <div class="control-group">
             <div class="control-label">筛选：</div>
             <div class="filter-controls">
@@ -384,7 +384,7 @@
             >
             </el-pagination>
           </div>
-          
+
           <!-- 添加GitHub项目链接 -->
           <div class="github-footer">
             <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank">
@@ -957,10 +957,10 @@ export default {
       if (!targetTimeStr || this.viewMode !== 'list') {
         return;
       }
-      
+
       try {
         const targetTime = new Date(targetTimeStr).getTime();
-        
+
         // 计算每个项目与目标时间的时间差
         const timeDistances = this.releases.map((repo, index) => {
           const repoTime = new Date(repo.latest_release.published_at).getTime();
@@ -970,38 +970,60 @@ export default {
             distance: Math.abs(repoTime - targetTime)
           };
         });
-        
+
         // 按时间差排序，找出最接近的项目
         const nearestRepo = timeDistances.sort((a, b) => a.distance - b.distance)[0];
-        
+
         if (nearestRepo) {
           // 计算该项目在哪一页
           const repoIndex = this.releases.findIndex(r => r.repo_name === nearestRepo.repoName);
           if (repoIndex === -1) return;
-          
+
           // 计算目标页码
           const targetPage = Math.floor(repoIndex / this.pageSize) + 1;
-          
+
           // 先设置当前页
           this.currentPage = targetPage;
-          
+
           // 等待DOM更新后滚动到对应元素
           this.$nextTick(() => {
             const element = document.querySelector(`[data-repo-name="${nearestRepo.repoName}"]`);
             if (element) {
+              // 先清除可能存在的其他高亮元素
+              document.querySelectorAll('.highlight').forEach(el => {
+                if (el !== element) {
+                  el.classList.remove('highlight');
+                }
+              });
+
+              // 平滑滚动到目标元素
               element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
               // 添加高亮效果
               element.classList.add('highlight');
+
+              // 延长高亮显示时间
               setTimeout(() => {
-                element.classList.remove('highlight');
+                // 使用渐变过渡移除高亮
+                element.style.transition = 'all 1s ease-out';
+                element.style.boxShadow = '0 0 0 rgba(64, 158, 255, 0)';
+                element.style.border = '1px solid transparent';
+
+                // 完全移除高亮类
+                setTimeout(() => {
+                  element.classList.remove('highlight');
+                  element.style.transition = '';
+                  element.style.boxShadow = '';
+                  element.style.border = '';
+                }, 1000);
               }, 2000);
-              
-              // 显示提示消息
-              this.$message({
-                message: `已跳转到最接近该时间的项目: ${nearestRepo.repoName.split('/')[1]}`,
-                type: 'success',
-                duration: 3000
-              });
+
+              //// 显示提示消息
+              //this.$message({
+              //  message: `已跳转到最接近该时间的项目: ${nearestRepo.repoName.split('/')[1]}`,
+              //  type: 'success',
+              //  duration: 3000
+              //});
             }
           });
         }
@@ -1010,40 +1032,40 @@ export default {
         this.$message.error('跳转失败，请重试');
       }
     },
-    
+
     // 为时间轴时间戳添加点击事件处理器
     addTimelineClickHandlers() {
       // 获取所有时间轴时间戳元素
       const timestamps = document.querySelectorAll('.footprints-section .el-timeline-item__timestamp')
-      
+
       timestamps.forEach(el => {
         // 移除旧的事件监听器（避免重复添加）
         el.removeEventListener('click', this.handleTimeStampClick)
-        
+
         // 添加新的点击样式和事件监听器
         el.classList.add('timeline-timestamp-clickable')
         el.setAttribute('title', '点击跳转到列表中最接近该时间的项目')
-        
+
         // 为每个时间戳绑定点击事件
         el.addEventListener('click', this.handleTimeStampClick)
       })
     },
-    
+
     // 处理时间戳点击事件
     handleTimeStampClick(event) {
       // 获取对应的日志项（通过DOM关系查找）
       const timelineItem = event.target.closest('.el-timeline-item')
       if (!timelineItem) return
-      
+
       // 获取日志项索引
       const index = Array.from(timelineItem.parentNode.children).indexOf(timelineItem)
       if (index === -1 || index >= this.clickLogs.length) return
-      
+
       // 获取对应的日志数据并跳转
       const log = this.clickLogs[index]
       this.jumpToNearestTimeInList(log.click_time)
     },
-    
+
     // 新增：格式化日志中的发布时间
     formatReleaseTime(isoString) {
       if (!isoString) return '-';
@@ -1083,7 +1105,7 @@ export default {
         await this.fetchReleases()
         // 添加：自动加载足迹数据
         this.fetchClickLogs(1)
-        
+
         // 为时间轴时间戳添加点击事件
         this.$nextTick(() => {
           this.addTimelineClickHandlers()
@@ -1581,24 +1603,6 @@ h2 {
   margin-left: 10px; /* 增加版本和标签之间的间距 */
 }
 
-/* 调整足迹项目布局 */
-.footprint-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.footprint-item .repo-name {
-  margin-right: 12px; /* 增加项目名称和标签之间的间距 */
-  flex: 1;
-}
-
-.footprint-item .release-info {
-  flex-shrink: 0;
-  margin-left: 8px; /* 增加左边距 */
-}
-
 /* 添加可点击标签的样式 */
 .clickable-tag {
   cursor: pointer;
@@ -1674,22 +1678,22 @@ h2 {
   .main-section {
     width: 100%; /* 在小屏幕上占据全宽 */
   }
-  
+
   .search-controls-container {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .search-input {
     width: 100%;
     margin-bottom: 10px;
   }
-  
+
   .view-filter-controls {
     width: 100%;
     justify-content: center;
   }
-  
+
   .footprints-content {
     max-height: 400px;
   }
@@ -1702,15 +1706,15 @@ h2 {
     gap: 15px;
     align-items: flex-start;
   }
-  
+
   .header-left, .header-right {
     width: 100%;
   }
-  
+
   .refresh-section {
     width: 100%;
   }
-  
+
   .control-group {
     margin-bottom: 8px;
   }
@@ -1718,7 +1722,7 @@ h2 {
   .repo-info {
     /* 已经是垂直布局，不需要改变 */
   }
-  
+
   .repo-description {
     white-space: normal; /* 小屏幕上允许文本换行 */
     -webkit-line-clamp: 2; /* 最多显示两行 */
@@ -1726,5 +1730,45 @@ h2 {
     -webkit-box-orient: vertical;
     white-space: normal;
   }
+}
+
+/* 添加高亮效果样式 */
+.highlight {
+  animation: highlight-pulse 2s ease-in-out;
+  box-shadow: 0 0 15px rgba(64, 158, 255, 0.8);
+  border: 1px solid #409EFF;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    background-color: rgba(64, 158, 255, 0.1);
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(64, 158, 255, 0.2);
+    transform: scale(1.01);
+  }
+  100% {
+    background-color: transparent;
+    transform: scale(1);
+  }
+}
+
+/* 调整足迹项目布局 */
+.footprint-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.footprint-item .repo-name {
+  margin-right: 12px; /* 增加项目名称和标签之间的间距 */
+  flex: 1;
+}
+
+.footprint-item .release-info {
+  flex-shrink: 0;
+  margin-left: 8px; /* 增加左边距 */
 }
 </style>

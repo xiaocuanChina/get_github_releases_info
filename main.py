@@ -718,6 +718,84 @@ async def get_click_logs(
         if conn:
             conn.close()
 
+@app.get("/api/repo-rss-link/{repo_name}")
+async def get_repo_rss_link(repo_name: str):
+    """获取单个仓库的RSS链接"""
+    try:
+        # GitHub releases的RSS链接格式
+        rss_link = f"https://github.com/{repo_name}/releases.atom"
+        return {"status": "success", "repo_name": repo_name, "rss_link": rss_link}
+    except Exception as e:
+        print(f"获取RSS链接时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/batch-rss-links")
+async def get_batch_rss_links(repo_names: List[str]):
+    """批量获取多个仓库的RSS链接"""
+    try:
+        result = []
+        for repo_name in repo_names:
+            rss_link = f"https://github.com/{repo_name}/releases.atom"
+            result.append({
+                "repo_name": repo_name,
+                "rss_link": rss_link
+            })
+        return {"status": "success", "data": result}
+    except Exception as e:
+        print(f"批量获取RSS链接时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 新增一个接口用于获取当前用户所有已star仓库的RSS链接
+@app.get("/api/all-starred-rss")
+async def get_all_starred_rss(request: Request):
+    """获取用户所有已star仓库的RSS链接"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 获取所有starred仓库
+            starred_repos = []
+            page = 1
+            while True:
+                starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
+                async with session.get(
+                        starred_url,
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "Accept": "application/vnd.github.v3+json"
+                        },
+                        proxy=PROXY_URL  # 使用代理
+                ) as response:
+                    if response.status != 200:
+                        break
+                    page_data = await response.json()
+                    if not page_data:
+                        break
+                    starred_repos.extend([repo["full_name"] for repo in page_data])
+                    page += 1
+
+            # 生成RSS链接
+            rss_links = []
+            for repo_name in starred_repos:
+                rss_link = f"https://github.com/{repo_name}/releases.atom"
+                rss_links.append({
+                    "repo_name": repo_name,
+                    "rss_link": rss_link
+                })
+
+            return {"status": "success", "total": len(rss_links), "data": rss_links}
+
+    except aiohttp.ClientError as e:
+        print(f"网络请求错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+    except Exception as e:
+        print(f"获取RSS链接时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
 

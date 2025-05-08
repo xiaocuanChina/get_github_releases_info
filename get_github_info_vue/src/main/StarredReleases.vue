@@ -19,32 +19,34 @@
             </div>
           </div>
 
-          <!-- 右侧：刷新按钮 -->
+          <!-- 右侧：刷新按钮和批量获取RSS链接按钮 -->
           <div class="header-right">
-            <div class="refresh-section">
-              <el-button
-                type="primary"
-                @click="handleManualRefresh"
-                :loading="false"
-                class="refresh-button progress-button"
-                :class="{'custom-loading': loading}"
-                round
-              >
-                <div class="button-content">
-                  <span v-if="loading" class="loading-spinner"></span>
-                  <span class="button-text">{{ loading ? `${loadingProgress}%` : '刷新数据' }}</span>
-                </div>
-                <div v-if="loading" class="button-progress" :style="{ width: `${loadingProgress}%` }"></div>
-              </el-button>
-              <!-- 保留原有进度条 
-              <div v-if="loading" class="refresh-progress">
-                <el-progress
-                  :percentage="loadingProgress"
-                  :stroke-width="2"
-                  :show-text="false"
-                  status="success"
-                />
-              </div>-->
+            <div class="action-buttons">
+              <el-tooltip content="批量获取RSS链接" placement="top">
+                <el-button 
+                  size="small"
+                  @click="handleBatchRss"
+                  :disabled="loading"
+                  icon="el-icon-link"
+                  circle
+                ></el-button>
+              </el-tooltip>
+              <div class="refresh-section">
+                <el-button
+                  type="primary"
+                  @click="handleManualRefresh"
+                  :loading="false"
+                  class="refresh-button progress-button"
+                  :class="{'custom-loading': loading}"
+                  round
+                >
+                  <div class="button-content">
+                    <span v-if="loading" class="loading-spinner"></span>
+                    <span class="button-text">{{ loading ? `${loadingProgress}%` : '刷新数据' }}</span>
+                  </div>
+                  <div v-if="loading" class="button-progress" :style="{ width: `${loadingProgress}%` }"></div>
+                </el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -180,10 +182,10 @@
                   <span class="current-month">{{ formatCalendarHeader(date) }}</span>
                   <div class="calendar-controls">
                     <el-button-group>
-                      <el-button size="small" @click="handlePrevMonth">上个月</el-button>
-                      <el-button size="small" @click="handleNextMonth">下个月</el-button>
+                      <el-button size="small" @click="handlePrevMonth" class="calendar-control-btn">上个月</el-button>
+                      <el-button size="small" @click="handleNextMonth" class="calendar-control-btn">下个月</el-button>
                     </el-button-group>
-                    <el-button size="small" type="primary" @click="handleToday">今天</el-button>
+                    <el-button size="small" type="primary" @click="handleToday" class="calendar-control-btn">今天</el-button>
                   </div>
                 </div>
               </template>
@@ -281,7 +283,7 @@
           </el-card>
 
           <!-- 仓库列表 -->
-          <div class="releases-list">
+          <div v-else-if="viewMode === 'list'" class="releases-list">
             <el-card
               v-for="repo in paginatedRepos"
               :key="repo.repo_name"
@@ -305,6 +307,13 @@
                       >
                         {{ repo.repo_name }}
                       </a>
+                      <el-tooltip content="复制RSS链接" placement="top">
+                        <AppIcon 
+                          name="link" 
+                          class="rss-icon" 
+                          @click.native.stop="copyToClipboard(`https://github.com/${repo.repo_name}/releases.atom`)"
+                        />
+                      </el-tooltip>
                     </h3>
                     <p v-if="repo.description" class="repo-description">
                       {{ repo.description }}
@@ -370,13 +379,19 @@
                   >
                     查看所有版本
                   </el-button>
+                  <el-button
+                    type="text"
+                    @click="copyRssLink(repo.repo_name)"
+                  >
+                    获取RSS链接
+                  </el-button>
                 </div>
               </div>
             </el-card>
           </div>
 
           <!-- 分页器 -->
-          <div class="pagination-container">
+          <div v-if="viewMode === 'list'" class="pagination-container">
             <el-pagination
               background
               @size-change="handleSizeChange"
@@ -400,6 +415,65 @@
         </div>
       </div>
     </template>
+
+    <!-- 添加 RSS 对话框 -->
+    <el-dialog
+      title="RSS 订阅链接"
+      :visible.sync="rssDialogVisible"
+      width="60%"
+      :close-on-click-modal="false"
+    >
+      <div v-loading="rssLoading">
+        <div v-if="rssMode === 'single'" class="single-rss-container">
+          <p>您可以使用以下链接订阅 {{ currentRepoName }} 的 Releases:</p>
+          <div class="rss-link-container">
+            <el-input v-model="singleRssLink" readonly></el-input>
+            <el-button type="primary" @click="copyToClipboard(singleRssLink)">复制</el-button>
+          </div>
+        </div>
+        <div v-else-if="rssMode === 'batch'" class="batch-rss-container">
+          <div class="batch-rss-header">
+            <p>已为您生成 {{ batchRssLinks.length }} 个订阅链接：</p>
+            <div class="batch-actions">
+              <el-button size="small" type="primary" @click="copyAllRssLinks">一键复制所有链接</el-button>
+              <el-button size="small" type="success" @click="downloadOpml">下载 OPML 文件</el-button>
+            </div>
+          </div>
+          
+          <!-- 添加搜索框 -->
+          <div class="rss-search-box">
+            <el-input
+              v-model="rssSearchQuery"
+              placeholder="搜索仓库名称..."
+              prefix-icon="el-icon-search"
+              clearable
+            ></el-input>
+          </div>
+          
+          <el-table 
+            :data="filteredRssLinks" 
+            style="width: 100%" 
+            height="350px" 
+            border
+          >
+            <el-table-column prop="repo_name" label="仓库名称" width="180"></el-table-column>
+            <el-table-column prop="rss_link" label="RSS 链接" show-overflow-tooltip>
+              <template slot-scope="scope">
+                <div class="table-rss-link">
+                  <span>{{ scope.row.rss_link }}</span>
+                  <el-button 
+                    size="mini" 
+                    type="text" 
+                    @click="copyToClipboard(scope.row.rss_link)"
+                    icon="el-icon-document-copy"
+                  >复制</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -452,6 +526,13 @@ export default {
       logsPageSize: 6, // 增加每页数量
       logsTotal: 0,
       lastActivityTime: null, // 修改：存储最后活动时间
+      rssDialogVisible: false,
+      rssLoading: false,
+      rssMode: 'single', // 'single' 或 'batch'
+      currentRepoName: '',
+      singleRssLink: '',
+      batchRssLinks: [],
+      rssSearchQuery: '', // 添加RSS搜索查询
     }
   },
 
@@ -492,6 +573,16 @@ export default {
           rgba(144, 147, 153, 0.3) ${this.loadingProgress}%, 
           rgba(144, 147, 153, 0.3) 100%)`
       }
+    },
+    filteredRssLinks() {
+      if (!this.rssSearchQuery) {
+        return this.batchRssLinks;
+      }
+      
+      const query = this.rssSearchQuery.toLowerCase();
+      return this.batchRssLinks.filter(item => 
+        item.repo_name.toLowerCase().includes(query)
+      );
     }
   },
 
@@ -1097,6 +1188,115 @@ export default {
         return false;
       }
     },
+
+    // 复制单个仓库的RSS链接
+    async copyRssLink(repoName) {
+      this.rssMode = 'single';
+      this.currentRepoName = repoName;
+      this.rssLoading = true;
+      this.rssDialogVisible = true;
+      
+      try {
+        const response = await axios.get(`${API_ENDPOINTS.REPO_RSS_LINK}/${repoName}`);
+        if (response.data.status === 'success') {
+          this.singleRssLink = response.data.rss_link;
+        } else {
+          this.$message.error('获取RSS链接失败');
+        }
+      } catch (error) {
+        console.error('获取RSS链接失败:', error);
+        this.$message.error('获取RSS链接失败');
+      } finally {
+        this.rssLoading = false;
+      }
+    },
+    
+    // 批量获取RSS链接
+    async handleBatchRss() {
+      this.rssMode = 'batch';
+      this.rssLoading = true;
+      this.rssDialogVisible = true;
+      this.batchRssLinks = [];
+      
+      try {
+        const response = await axios.get(API_ENDPOINTS.ALL_STARRED_RSS, {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`
+          }
+        });
+        
+        if (response.data.status === 'success') {
+          this.batchRssLinks = response.data.data;
+        } else {
+          this.$message.error('获取RSS链接失败');
+        }
+      } catch (error) {
+        console.error('批量获取RSS链接失败:', error);
+        this.$message.error('批量获取RSS链接失败');
+      } finally {
+        this.rssLoading = false;
+      }
+    },
+    
+    // 复制文本到剪贴板
+    copyToClipboard(text) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          this.$message.success('已复制到剪贴板');
+        } else {
+          this.$message.error('复制失败');
+        }
+      } catch (err) {
+        this.$message.error('复制失败');
+      }
+      
+      document.body.removeChild(textArea);
+    },
+    
+    // 复制所有RSS链接
+    copyAllRssLinks() {
+      const linkTexts = this.batchRssLinks.map(item => item.rss_link).join('\n');
+      this.copyToClipboard(linkTexts);
+    },
+    
+    // 下载OPML文件
+    downloadOpml() {
+      // 创建OPML格式文件
+      let opmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="1.0">
+  <head>
+    <title>GitHub Starred 仓库 RSS 订阅</title>
+  </head>
+  <body>
+    <outline text="GitHub Starred Releases" title="GitHub Starred Releases">`;
+      
+      this.batchRssLinks.forEach(item => {
+        opmlContent += `
+      <outline type="rss" text="${item.repo_name}" title="${item.repo_name}" xmlUrl="${item.rss_link}" htmlUrl="https://github.com/${item.repo_name}/releases"/>`;
+      });
+      
+      opmlContent += `
+    </outline>
+  </body>
+</opml>`;
+      
+      // 创建下载
+      const blob = new Blob([opmlContent], { type: 'text/xml' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'github_starred_releases.opml';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      this.$message.success('OPML文件已下载');
+    },
   },
 
   async mounted() {
@@ -1316,6 +1516,25 @@ export default {
 .footprints-card {
   position: sticky;
   top: 90px; /* 增加顶部距离，与搜索栏保持更远的距离 */
+  height: calc(100vh - 260px); /* 调整高度 */
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.footprints-card .el-card__body) {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.footprints-content {
+  max-height: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  position: relative;
 }
 
 /* 用户信息样式 */
@@ -1361,9 +1580,10 @@ export default {
 }
 
 .footprints-content {
-  max-height: calc(100vh - 250px);
+  max-height: none;
+  flex: 1;
   overflow-y: auto;
-  padding-right: 10px;
+  padding: 10px;
   position: relative;
 }
 
@@ -1618,9 +1838,99 @@ h2 {
 
 /* 日历卡片样式 */
 .calendar-card {
-  margin-top: 16px;
+  margin-top: 0px; /* 移除顶部边距 */
   margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  height: auto; /* 改为自动高度 */
+  max-height: calc(100vh - 260px); /* 设置最大高度 */
+}
+
+:deep(.calendar-card .el-card__body) {
+  padding: 8px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.calendar-card .el-calendar) {
+  height: auto; /* 改为自动高度 */
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  overflow: visible; /* 避免滚动 */
+}
+
+:deep(.calendar-card .el-calendar__body) {
+  flex: none; /* 改为非弹性布局 */
+  overflow: visible; /* 避免滚动 */
+}
+
+:deep(.el-calendar__header) {
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+
+/* 确保按钮文字可见 */
+:deep(.el-button) {
+  min-width: auto;
+  padding: 8px 15px;
+}
+
+:deep(.el-button.is-text) {
+  min-width: auto;
+}
+
+/* 确保日历表头按钮内容可见 */
+:deep(.el-calendar__button-group .el-button-group) {
+  display: flex;
+  align-items: center;
+}
+
+:deep(.el-calendar__button-group .el-button) {
+  min-width: 70px;
+  white-space: nowrap;
+  overflow: visible;
+  padding: 8px 12px;
+}
+
+/* 保持原有的隐藏样式，但移除position:absolute以避免影响布局 */
+:deep(.el-calendar__title) {
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+:deep(.el-button-group .el-button) {
+  margin: 0;
+}
+
+:deep(.el-calendar-table th) {
+  padding: 8px;
+  text-align: center;
+  border-bottom: 1px solid #EBEEF5;
+}
+
+:deep(.el-calendar-table td) {
+  height: auto;
+  border-bottom: 1px solid #EBEEF5;
+  border-right: 1px solid #EBEEF5;
+}
+
+:deep(.el-calendar-table td:last-child) {
+  border-right: none;
+}
+
+:deep(.el-calendar-table .el-calendar-day) {
+  height: 100%;
+  padding: 0;
+  display: flex;
 }
 
 /* 错误卡片样式 */
@@ -1872,5 +2182,327 @@ h2 {
 .footprint-item .release-info {
   flex-shrink: 0;
   margin-left: 8px; /* 增加左边距 */
+}
+
+/* 日历相关样式 */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.current-month {
+  font-size: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.calendar-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 日历单元格样式 */
+.calendar-cell {
+  height: 100%;
+  min-height: 60px;
+  max-height: 90px;
+  padding: 5px;
+  border-radius: 6px;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden; /* 防止内容溢出 */
+}
+
+:deep(.el-calendar-table td) {
+  height: auto;
+}
+
+:deep(.el-calendar-table .el-calendar-day) {
+  height: 100%;
+  padding: 0;
+  display: flex;
+}
+
+.calendar-cell.today {
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+.calendar-day {
+  margin: 0;
+  padding: 0 3px;
+  text-align: right;
+  font-size: 13px;
+  color: #606266;
+  border-radius: 4px;
+}
+
+.calendar-day.weekend {
+  color: #f56c6c;
+}
+
+.calendar-day.other-month {
+  opacity: 0.5;
+}
+
+/* 发布项目样式 */
+.releases-summary {
+  margin-top: 3px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  max-height: 60px; /* 限制最大高度 */
+}
+
+.single-release {
+  display: block;
+  background-color: #f0f9eb;
+  color: #67c23a;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.3s;
+}
+
+.single-release:hover {
+  background-color: #e1f3d8;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.single-release-version {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.pre-badge {
+  font-size: 10px;
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  padding: 1px 3px;
+  border-radius: 3px;
+  margin-left: 3px;
+}
+
+.multiple-releases {
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.multiple-releases:hover {
+  background-color: #d9ecff;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 弹出层样式 */
+:deep(.releases-popover) {
+  padding: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.releases-list-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.release-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ebeef5;
+  text-decoration: none;
+  color: #606266;
+}
+
+.release-item:last-child {
+  border-bottom: none;
+}
+
+.release-item-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.release-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.release-main-info .repo-name {
+  font-weight: bold;
+  color: #303133;
+}
+
+.release-version {
+  font-size: 12px;
+  color: #67c23a;
+}
+
+.release-time {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+.release-detail-link {
+  font-size: 12px;
+  color: #409eff;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* 最后活动指示器 */
+.last-activity-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  color: #409eff;
+  font-size: 14px;
+  z-index: 2;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 加载状态 */
+.logs-loading {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+}
+
+/* 空状态 */
+.logs-empty {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+}
+
+/* 分页器 */
+.logs-pagination {
+  margin-top: 15px;
+  text-align: center;
+}
+
+/* 确保日历控制按钮的文字可见 */
+.calendar-control-btn {
+  color: #606266 !important;
+}
+
+.calendar-control-btn[type="primary"] {
+  color: #fff !important;
+}
+
+:deep(.el-button--default) {
+  color: #606266 !important;
+}
+
+:deep(.el-button--primary) {
+  color: #fff !important;
+}
+
+/* RSS 对话框样式 */
+.single-rss-container {
+  padding: 10px;
+}
+
+.rss-link-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.batch-rss-container {
+  padding: 10px;
+}
+
+.batch-rss-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.table-rss-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 添加头部新样式 */
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 调整头部样式 */
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* RSS图标样式 */
+.rss-icon {
+  margin-left: 6px;
+  font-size: 14px;
+  color: #ff9900;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.rss-icon:hover {
+  transform: scale(1.2);
+  color: #e67e22;
+}
+
+/* RSS搜索框样式 */
+.rss-search-box {
+  margin-bottom: 15px;
+}
+
+/* 调整repo-info样式 */
+.repo-info h3 {
+  display: flex;
+  align-items: center;
+}
+
+/* 表格样式调整 */
+:deep(.el-table) {
+  margin-top: 15px;
 }
 </style>

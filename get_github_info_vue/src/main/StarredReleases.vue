@@ -176,19 +176,18 @@
         <div class="main-section">
           <!-- 添加日历视图 -->
           <el-card v-if="viewMode === 'calendar'" class="calendar-card">
+            <div class="custom-calendar-header">
+              <span class="current-month">{{ formatCalendarHeader(calendarDate) }}</span>
+              <div class="calendar-controls">
+                <el-button-group>
+                  <el-button size="small" @click="handlePrevMonth" class="calendar-control-btn">上个月</el-button>
+                  <el-button size="small" @click="handleNextMonth" class="calendar-control-btn">下个月</el-button>
+                </el-button-group>
+                <el-button size="small" type="primary" @click="handleToday" class="calendar-control-btn">今天</el-button>
+              </div>
+            </div>
             <el-calendar v-model="calendarDate">
-              <template #header="{ date }">
-                <div class="calendar-header">
-                  <span class="current-month">{{ formatCalendarHeader(date) }}</span>
-                  <div class="calendar-controls">
-                    <el-button-group>
-                      <el-button size="small" @click="handlePrevMonth" class="calendar-control-btn">上个月</el-button>
-                      <el-button size="small" @click="handleNextMonth" class="calendar-control-btn">下个月</el-button>
-                    </el-button-group>
-                    <el-button size="small" type="primary" @click="handleToday" class="calendar-control-btn">今天</el-button>
-                  </div>
-                </div>
-              </template>
+              <!-- 不使用原有的header插槽 -->
               <template #dateCell="{ data }">
                 <div class="calendar-cell" :class="{ 
                   'today': isToday(data.day),
@@ -943,7 +942,9 @@ export default {
     },
 
     formatCalendarHeader(date) {
-      return format(date, 'yyyy年 MM月', { locale: zhCN })
+      // 确保参数是Date对象
+      const dateObj = date instanceof Date ? date : new Date(date);
+      return format(dateObj, 'yyyy年 MM月', { locale: zhCN });
     },
 
     isToday(dateString) {
@@ -2238,6 +2239,7 @@ h2 {
   align-items: center;
   margin-bottom: 10px;
   width: 100%;
+  padding: 0 10px;
 }
 
 .current-month {
@@ -2250,20 +2252,39 @@ h2 {
   display: flex;
   gap: 10px;
   align-items: center;
+  opacity: 1; /* 确保始终可见 */
+  transition: none; /* 移除过渡效果 */
 }
 
-/* 日历单元格样式 */
-.calendar-cell {
-  height: 100%;
-  min-height: 60px;
-  max-height: 90px;
-  padding: 5px;
-  border-radius: 6px;
-  transition: all 0.3s;
+/* 覆盖Element UI可能的隐藏逻辑 */
+:deep(.el-calendar__header) {
+  display: none !important; /* 隐藏原始头部 */
+}
+
+:deep(.el-calendar__body) {
+  padding-top: 12px; /* 弥补头部隐藏后的间距 */
+}
+
+/* 确保自定义头部显示 */
+:deep(.el-calendar > .el-calendar__header + .calendar-header) {
+  display: flex !important;
+}
+
+/* 调整按钮大小和可见性 */
+.calendar-control-btn {
+  min-width: 60px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.calendar-control-btn[type="primary"] {
+  color: #fff !important;
+}
+
+/* 确保日历体正常显示 */
+:deep(.el-calendar) {
   display: flex;
   flex-direction: column;
-  position: relative;
-  overflow: hidden; /* 防止内容溢出 */
 }
 
 :deep(.el-calendar-table td) {
@@ -2573,5 +2594,75 @@ h2 {
     box-shadow: inset 0 0 0 2px #409eff;
     background-color: rgba(64, 158, 255, 0.1);
   }
+}
+
+/* 恢复日历单元格样式 */
+.calendar-cell {
+  height: 100%;
+  min-height: 60px;
+  max-height: 90px;
+  padding: 5px;
+  border-radius: 6px;
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden; /* 防止内容溢出 */
+}
+
+/* 添加自定义日历头部样式 */
+.custom-calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.custom-calendar-header .current-month {
+  font-size: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.custom-calendar-header .calendar-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* 隐藏Element UI原生日历头部 */
+:deep(.el-calendar__header) {
+  display: none !important;
+}
+
+/* 覆盖按钮文本颜色 */
+.calendar-control-btn {
+  min-width: 60px;
+}
+
+.calendar-control-btn[type="primary"] {
+  color: #fff !important;
+}
+</style>
+
+<!-- 添加全局样式，使日历控制按钮始终可见 -->
+<style>
+/* 覆盖Element UI日历控件的默认行为 */
+.el-calendar-table .el-calendar-day .el-calendar-day__layer {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.el-calendar__header .el-calendar__button-group {
+  opacity: 1 !important;
+  visibility: visible !important;
+  transition: none !important;
+  display: flex !important;
+}
+
+.el-calendar__header:hover .el-calendar__button-group {
+  opacity: 1 !important;
 }
 </style>

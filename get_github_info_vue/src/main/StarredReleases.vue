@@ -13,8 +13,17 @@
               <h2>GitHub Starred Releases</h2>
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
-                <span class="username">{{ userInfo.login }}</span>
-                <el-button type="text" @click="handleLogout" class="logout-btn">退出登录</el-button>
+                <a :href="'https://github.com/' + userInfo.login" target="_blank" class="username">{{ userInfo.login }}</a>
+                <el-button 
+                  type="danger" 
+                  size="mini" 
+                  @click="handleLogout" 
+                  class="logout-btn" 
+                  icon="el-icon-switch-button"
+                  round
+                >
+                  退出登录
+                </el-button>
               </div>
             </div>
           </div>
@@ -381,12 +390,6 @@
                   >
                     查看所有版本
                   </el-button>
-                  <el-button
-                    type="text"
-                    @click="copyRssLink(repo.repo_name)"
-                  >
-                    获取RSS链接
-                  </el-button>
                 </div>
               </div>
             </el-card>
@@ -406,15 +409,15 @@
             >
             </el-pagination>
           </div>
-
-          <!-- 添加GitHub项目链接 -->
-          <div class="github-footer">
-            <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank">
-              <GitHubLogo :size="24" />
-              访问 GitHub 项目仓库
-            </a>
-          </div>
         </div>
+      </div>
+      
+      <!-- 添加GitHub项目链接，移到main-content外部 -->
+      <div class="github-footer">
+        <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank">
+          <GitHubLogo :size="24" />
+          访问 GitHub 项目仓库
+        </a>
       </div>
     </template>
 
@@ -1589,30 +1592,47 @@ export default {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 0;
+  gap: 10px;
+  padding: 8px 0;
   border-top: 1px solid #eee;
   flex-wrap: wrap;
 }
 
 .user-avatar {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
+  border: 2px solid #eaeaea;
+  transition: all 0.3s;
+}
+
+.user-avatar:hover {
+  transform: scale(1.1);
+  border-color: #409eff;
 }
 
 .username {
   font-size: 14px;
-  color: #606266;
+  font-weight: 500;
+  color: #303133;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.username:hover {
+  color: #409eff;
+  text-decoration: underline;
 }
 
 .logout-btn {
-  color: #F56C6C;
-  padding: 0;
+  margin-left: auto;
+  opacity: 1 !important;
+  transition: all 0.3s;
 }
 
 .logout-btn:hover {
-  color: #f78989;
+  transform: translateY(-2px);
+  opacity: 0.9 !important;
 }
 
 /* 左侧足迹区域 */
@@ -1643,6 +1663,8 @@ export default {
   border-top: 1px solid #eee;
   border-radius: 0 0 12px 12px;
   background-color: #f8f9fa;
+  width: 100%; /* 设置宽度为100% */
+  box-sizing: border-box;
 }
 
 .github-footer a {
@@ -1651,12 +1673,13 @@ export default {
   gap: 8px;
   color: #606266;
   text-decoration: none;
-  transition: color 0.3s;
+  transition: color 0.3s, transform 0.3s, box-shadow 0.3s;
   font-size: 14px;
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 20px;
   background-color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-width: 200px; /* 设置最小宽度 */
 }
 
 .github-footer a:hover {
@@ -1891,29 +1914,30 @@ h2 {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  height: auto; /* 改为自动高度 */
-  max-height: calc(100vh - 260px); /* 设置最大高度 */
+  height: calc(100vh - 260px); /* 改为与足迹区域高度一致 */
+  overflow: hidden; /* 添加溢出隐藏 */
 }
 
 :deep(.calendar-card .el-card__body) {
   padding: 8px;
-  height: auto;
+  height: 100%; /* 修改为100%高度 */
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* 添加溢出隐藏 */
 }
 
 :deep(.calendar-card .el-calendar) {
-  height: auto; /* 改为自动高度 */
+  height: 100%; /* 改为100%高度 */
   display: flex;
   flex-direction: column;
   padding: 0;
   margin: 0;
-  overflow: visible; /* 避免滚动 */
+  overflow: hidden; /* 改为隐藏溢出 */
 }
 
 :deep(.calendar-card .el-calendar__body) {
-  flex: none; /* 改为非弹性布局 */
-  overflow: visible; /* 避免滚动 */
+  flex: 1; /* 改为弹性布局，占据剩余空间 */
+  overflow: auto; /* 改为可滚动 */
 }
 
 :deep(.el-calendar__header) {
@@ -2325,8 +2349,8 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  overflow: hidden;
-  max-height: 60px; /* 限制最大高度 */
+  overflow: auto; /* 改为可滚动 */
+  max-height: none; /* 移除高度限制 */
 }
 
 .single-release {
@@ -2600,7 +2624,7 @@ h2 {
 .calendar-cell {
   height: 100%;
   min-height: 60px;
-  max-height: 90px;
+  max-height: none; /* 移除最大高度限制 */
   padding: 5px;
   border-radius: 6px;
   transition: all 0.3s;
@@ -2644,6 +2668,126 @@ h2 {
 
 .calendar-control-btn[type="primary"] {
   color: #fff !important;
+}
+
+/* 确保任何状态下按钮文字都是白色 */
+:deep(.el-button) {
+  color: white;
+}
+
+/* 确保加载状态下图标也是白色 */
+:deep(.el-button.is-loading .el-icon) {
+  color: white !important;
+}
+
+/* 添加对文本按钮的特殊处理，让它们在页面上可见 */
+:deep(.el-button--text) {
+  color: #409EFF !important; /* 使用主题蓝色 */
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+:deep(.el-button--text:hover) {
+  color: #66b1ff !important; /* 悬停时颜色稍浅 */
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+/* 特别处理release-footer中的按钮 */
+.release-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #eee;
+}
+
+.release-footer .el-button {
+  margin-left: 0;
+}
+
+/* 表格中的文本按钮样式 */
+:deep(.el-table .el-button--text) {
+  color: #409EFF !important;
+  padding: 3px 8px;
+  font-size: 12px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* 调整表格链接样式 */
+.table-rss-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.table-rss-link .el-button {
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* 确保有背景色的按钮文字为白色 */
+:deep(.el-button--primary),
+:deep(.el-button--success),
+:deep(.el-button--warning),
+:deep(.el-button--danger),
+:deep(.el-button--info) {
+  color: white !important;
+}
+
+/* 原始样式设置 */
+:deep(.el-button) {
+  color: inherit; /* 使用默认颜色 */
+}
+
+/* 确保加载状态下图标也是白色 */
+:deep(.el-button.is-loading .el-icon) {
+  color: white !important;
+}
+
+/* 添加对文本按钮的特殊处理，让它们在页面上可见 */
+:deep(.el-button--text) {
+  color: #409EFF !important; /* 使用主题蓝色 */
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 4px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+:deep(.el-button--text:hover) {
+  color: #66b1ff !important; /* 悬停时颜色稍浅 */
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+/* 特别处理release-footer中的按钮 */
+.release-footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #eee;
+}
+
+.release-footer .el-button {
+  margin-left: 0;
+}
+
+/* 表格中的文本按钮样式 */
+:deep(.el-table .el-button--text) {
+  color: #409EFF !important;
+  padding: 3px 8px;
+  font-size: 12px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* 清除之前错误的全局设置 */
+:deep(.el-button--default) {
+  color: #606266 !important; /* 默认按钮文字颜色 */
 }
 </style>
 

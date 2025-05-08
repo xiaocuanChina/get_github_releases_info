@@ -9,7 +9,6 @@ export const API_ENDPOINTS = {
   AUTH_VERIFY: `${API_BASE_URL}/api/auth/verify`,
   RECORD_CLICK: `${API_BASE_URL}/api/record-click`,
   CLICK_LOGS: `${API_BASE_URL}/api/click-logs`,
-  // 添加RSS链接相关端点
   REPO_RSS_LINK: `${API_BASE_URL}/api/repo-rss-link`,
   BATCH_RSS_LINKS: `${API_BASE_URL}/api/batch-rss-links`,
   ALL_STARRED_RSS: `${API_BASE_URL}/api/all-starred-rss`

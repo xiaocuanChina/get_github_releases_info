@@ -190,7 +190,10 @@
                 </div>
               </template>
               <template #dateCell="{ data }">
-                <div class="calendar-cell" :class="{ 'today': isToday(data.day) }">
+                <div class="calendar-cell" :class="{ 
+                  'today': isToday(data.day),
+                  'highlight-calendar-cell': data.day === highlightCalendarDate 
+                }">
                   <p :class="{
                     'calendar-day': true,
                     'weekend': isWeekend(data.day),
@@ -533,6 +536,7 @@ export default {
       singleRssLink: '',
       batchRssLinks: [],
       rssSearchQuery: '', // 添加RSS搜索查询
+      highlightCalendarDate: null, // 需要在日历中高亮显示的日期
     }
   },
 
@@ -1160,9 +1164,16 @@ export default {
       const index = Array.from(timelineItem.parentNode.children).indexOf(timelineItem)
       if (index === -1 || index >= this.clickLogs.length) return
 
-      // 获取对应的日志数据并跳转
+      // 获取对应的日志数据
       const log = this.clickLogs[index]
-      this.jumpToNearestTimeInList(log.click_time)
+      
+      // 如果当前是列表视图，跳转到列表中最接近的项目
+      if (this.viewMode === 'list') {
+        this.jumpToNearestTimeInList(log.click_time)
+      } else if (this.viewMode === 'calendar') {
+        // 如果当前是日历视图，跳转到对应的日期
+        this.jumpToDateInCalendar(log.click_time)
+      }
     },
 
     // 新增：格式化日志中的发布时间
@@ -1296,6 +1307,42 @@ export default {
       document.body.removeChild(link);
       
       this.$message.success('OPML文件已下载');
+    },
+
+    // 添加跳转到日历特定日期的方法
+    jumpToDateInCalendar(timeStr) {
+      if (!timeStr) return;
+      
+      try {
+        // 解析时间
+        const targetDate = new Date(timeStr);
+        
+        // 设置日历显示的月份
+        this.calendarDate = new Date(
+          targetDate.getFullYear(),
+          targetDate.getMonth(),
+          1
+        );
+        
+        // 标记需要高亮的日期
+        this.highlightCalendarDate = format(targetDate, 'yyyy-MM-dd');
+        
+        // 显示提示消息
+        this.$message({
+          message: `已跳转到日历中的 ${format(targetDate, 'yyyy-MM-dd')} 日期`,
+          type: 'success',
+          duration: 3000
+        });
+        
+        // 3秒后取消高亮
+        setTimeout(() => {
+          this.highlightCalendarDate = null;
+        }, 3000);
+        
+      } catch (error) {
+        console.error('跳转到日历日期失败:', error);
+        this.$message.error('日期跳转失败，请重试');
+      }
     },
   },
 
@@ -2504,5 +2551,27 @@ h2 {
 /* 表格样式调整 */
 :deep(.el-table) {
   margin-top: 15px;
+}
+
+/* 日历单元格高亮样式 */
+.highlight-calendar-cell {
+  animation: calendar-highlight-pulse 3s ease-in-out;
+  box-shadow: inset 0 0 0 2px #409eff;
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+@keyframes calendar-highlight-pulse {
+  0% {
+    box-shadow: inset 0 0 0 2px #409eff;
+    background-color: rgba(64, 158, 255, 0.3);
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px #409eff;
+    background-color: rgba(64, 158, 255, 0.2);
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px #409eff;
+    background-color: rgba(64, 158, 255, 0.1);
+  }
 }
 </style>

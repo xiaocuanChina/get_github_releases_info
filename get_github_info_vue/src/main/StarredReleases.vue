@@ -7,15 +7,10 @@
     <template v-else>
       <el-card class="header-card">
         <div class="header">
+          <!-- 左侧：标题和用户信息 -->
           <div class="header-left">
             <div class="title-section">
               <h2>GitHub Starred Releases</h2>
-              <div class="github-link">
-                <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank" title="访问项目GitHub仓库">
-                  <GitHubLogo :size="20" />
-                  <span>项目源码</span>
-                </a>
-              </div>
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
                 <span class="username">{{ userInfo.login }}</span>
@@ -23,7 +18,48 @@
               </div>
             </div>
           </div>
+          
+          <!-- 右侧：刷新按钮 -->
           <div class="header-right">
+            <div class="refresh-section">
+              <el-button
+                type="primary"
+                @click="handleManualRefresh"
+                :loading="loading"
+                class="refresh-button"
+                round
+              >
+                刷新数据
+              </el-button>
+              <!-- 进度条 -->
+              <div v-if="loading" class="refresh-progress">
+                <el-progress
+                  :percentage="loadingProgress"
+                  :stroke-width="2"
+                  :show-text="false"
+                  status="success"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </el-card>
+
+      <!-- 搜索区域和控件组 -->
+      <div class="search-controls-container">
+        <!-- 搜索框 -->
+        <el-input
+            v-model="searchQuery"
+            placeholder="搜索仓库..."
+            prefix-icon="el-icon-search"
+            clearable
+            class="search-input"
+        />
+        
+        <!-- 控件区域 -->
+        <div class="view-filter-controls">
+          <div class="control-group">
+            <div class="control-label">视图：</div>
             <div class="view-controls">
               <el-tooltip content="列表视图" placement="top">
                 <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
@@ -36,7 +72,10 @@
                 </div>
               </el-tooltip>
             </div>
-
+          </div>
+          
+          <div class="control-group">
+            <div class="control-label">筛选：</div>
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
                 <div class="icon-button" :class="{ active: filterType === 'all' }" @click="filterType = 'all'">
@@ -54,29 +93,9 @@
                 </div>
               </el-tooltip>
             </div>
-
-            <div class="refresh-section">
-              <el-button
-                type="primary"
-                @click="handleManualRefresh"
-                :loading="loading"
-                class="refresh-button"
-              >
-                刷新数据
-              </el-button>
-              <!-- 进度条 -->
-              <div v-if="loading" class="refresh-progress">
-                <el-progress
-                  :percentage="loadingProgress"
-                  :stroke-width="2"
-                  :show-text="false"
-                  status="success"
-                />
-              </div>
-            </div>
           </div>
         </div>
-      </el-card>
+      </div>
 
       <!-- 主内容区域使用左右布局 -->
       <div class="main-content">
@@ -255,15 +274,6 @@
                 show-icon
             />
           </el-card>
-
-          <!-- 搜索框 -->
-          <el-input
-              v-model="searchQuery"
-              placeholder="搜索仓库..."
-              prefix-icon="el-icon-search"
-              clearable
-              class="search-input"
-          />
 
           <!-- 仓库列表 -->
           <div class="releases-list">
@@ -1106,24 +1116,193 @@ export default {
 .header-card {
   margin-bottom: 20px;
   min-height: 120px;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .header-left {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  flex: 1;
+  max-width: 300px;
 }
 
-.header-right {
+/* 卡片圆角样式 */
+:deep(.el-card) {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: box-shadow 0.3s;
+}
+
+:deep(.el-card:hover) {
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.05);
+}
+
+:deep(.el-card__body) {
+  border-radius: 12px;
+}
+
+/* 按钮圆角样式 */
+:deep(.el-button) {
+  border-radius: 20px;
+}
+
+:deep(.el-tag) {
+  border-radius: 10px;
+}
+
+/* 输入框圆角 */
+:deep(.el-input__inner) {
+  border-radius: 20px;
+}
+
+/* 搜索区域和控件样式 */
+.search-controls-container {
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 100;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 300px;
+  margin: 0;
+}
+
+.view-filter-controls {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 控件组样式 */
+.control-group {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.control-label {
+  font-size: 14px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+/* 视图和筛选控件样式 */
+.view-controls, .filter-controls {
+  display: flex;
+  gap: 6px;
+  background-color: #f5f7fa;
+  border-radius: 20px;
+  padding: 4px;
+}
+
+/* 图标按钮样式 */
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: transparent;
+  color: #606266;
+}
+
+.icon-button:hover {
+  background-color: #e6e9ed;
+  transform: translateY(-2px);
+}
+
+.icon-button.active {
+  background-color: #409EFF;
+  color: white;
+}
+
+/* 删除page-github-link相关样式，只保留github-footer样式 */
+
+/* GitHub项目链接样式 */
+.github-footer {
+  margin-top: 20px;
+  text-align: center;
+  padding: 15px 0;
+  border-top: 1px solid #eee;
+  border-radius: 0 0 12px 12px;
+  background-color: #f8f9fa;
+}
+
+.github-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.github-footer a:hover {
+  color: #409EFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 仓库卡片圆角 */
+.repo-card {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.repo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* 日历视图圆角 */
+.calendar-card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* 错误卡片圆角 */
+.error-card {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* 分页器圆角 */
+:deep(.el-pagination .el-pager li) {
+  border-radius: 4px;
+}
+
+:deep(.el-pagination .btn-prev),
+:deep(.el-pagination .btn-next) {
+  border-radius: 4px;
 }
 
 /* 主内容区域左右布局 */
@@ -1155,8 +1334,6 @@ export default {
   padding-right: 10px;
   position: relative;
 }
-
-
 
 .footprint-item {
   display: flex;
@@ -1227,10 +1404,6 @@ export default {
   min-width: 0; /* 防止溢出 */
 }
 
-.search-input {
-  margin: 20px 0;
-}
-
 .repo-card {
   margin-bottom: 20px;
 }
@@ -1277,111 +1450,6 @@ h4 {
   border-radius: 4px;
 }
 
-.error-card {
-  margin-bottom: 20px;
-}
-
-/* Markdown 内容样式 */
-.markdown-body {
-  transition: max-height 0.3s ease-out;
-  width: 100%;
-  overflow-x: hidden;
-  font-size: 14px;
-  line-height: 1.5;
-  word-wrap: break-word;
-}
-
-/* Markdown 中的图片样式 */
-.markdown-body img {
-  max-width: 100% !important;
-  height: auto !important;
-  display: block;
-  background-color: #fff;
-  border-style: none;
-  box-sizing: border-box;
-  margin: 16px 0; /* 调整上下间距 */
-  border: 1px solid #d0d7de; /* GitHub 风格的边框 */
-  border-radius: 6px;
-}
-
-/* 移除不必要的阴影效果 */
-.markdown-body img {
-  box-shadow: none;
-}
-
-/* 确保图片容器样式 */
-.markdown-wrapper {
-  width: 100%;
-  overflow-x: hidden;
-  padding: 16px;
-  background-color: #fff;
-}
-
-/* 优化收起状态的样式 */
-.markdown-body.collapsed {
-  max-height: 300px;
-  overflow: hidden;
-  position: relative;
-}
-
-/* 渐变遮罩效果 */
-.markdown-body.collapsed::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 60px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);
-  pointer-events: none;
-}
-
-/* 展开按钮样式 */
-.expand-button {
-  text-align: center;
-  padding: 8px;
-  color: #0969da; /* GitHub 的链接蓝色 */
-  cursor: pointer;
-  position: relative;
-  margin-top: -20px;
-  z-index: 1;
-  background: none;
-  border: none;
-  font-size: 14px;
-}
-
-.expand-button:hover {
-  color: #1a7f37; /* GitHub 的悬停颜色 */
-  text-decoration: underline;
-}
-
-/* 图片加载动画 */
-.markdown-body img {
-  opacity: 0;
-  transition: opacity 0.2s ease-in;
-}
-
-.markdown-body img.loaded {
-  opacity: 1;
-}
-
-/* 链接中的图片特殊处理 */
-.markdown-body a img {
-  border: 1px solid rgba(31, 35, 40, 0.15);
-}
-
-/* 表格中的图片处理 */
-.markdown-body table img {
-  margin: 0;
-  border: none;
-}
-
-/* 添加分页样式 */
-.pagination-container {
-  margin-top: 20px;
-  text-align: center;
-}
-
 .source-code-notice {
   margin: 8px 0;
   color: #909399;
@@ -1389,23 +1457,6 @@ h4 {
 
 .source-code-notice .el-tag {
   margin-right: 8px;
-}
-
-.filter-group {
-  margin-right: 10px;
-}
-
-/* 调整标题样式 */
-h2 {
-  margin: 0;
-  margin-bottom: 4px;
-}
-
-/* 确保头部布局正确 */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
 }
 
 .repo-title {
@@ -1472,36 +1523,7 @@ h2 {
   gap: 8px;
 }
 
-/* GitHub 项目链接样式 */
-.github-link {
-  margin-bottom: 8px;
-}
-
-.github-link a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #606266;
-  text-decoration: none;
-  transition: color 0.3s;
-  font-size: 14px;
-}
-
-.github-link a:hover {
-  color: #409EFF;
-}
-
-.github-link .el-icon-star-on {
-  color: #F7BA2A;
-}
-
 /* 添加日历视图相关样式 */
-.calendar-card {
-  margin-top: 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-}
-
 .calendar-header {
   display: flex;
   justify-content: space-between;
@@ -1763,6 +1785,54 @@ h2 {
   .footprints-content {
     max-height: 400px;
   }
+  
+  /* 在较窄屏幕上调整搜索区域布局 */
+  .search-controls-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-input {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .view-filter-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* 项目源码链接位置调整 */
+  .page-github-link {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+}
+
+/* 更小的屏幕 */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .header-left, .header-right {
+    width: 100%;
+  }
+  
+  .refresh-section {
+    width: 100%;
+  }
+  
+  .page-github-link {
+    padding: 5px 8px;
+  }
+  
+  .page-github-link span {
+    display: none; /* 只显示图标 */
+  }
 }
 
 /* 添加可点击标签的样式 */
@@ -1776,10 +1846,13 @@ h2 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 控件组样式 */
+/* 视图和筛选控件样式 */
 .view-controls, .filter-controls {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  background-color: #f5f7fa;
+  border-radius: 20px;
+  padding: 4px;
 }
 
 /* 图标按钮样式 */
@@ -1792,7 +1865,7 @@ h2 {
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s;
-  background-color: #f5f7fa;
+  background-color: transparent;
   color: #606266;
 }
 
@@ -1938,5 +2011,202 @@ h2 {
 
 :deep(.el-timeline-item__node) {
   left: 6px;
+}
+
+/* 页面右上角的GitHub链接 */
+.page-github-link {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  background-color: #fff;
+  padding: 8px 12px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+}
+
+.page-github-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
+}
+
+.page-github-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-size: 14px;
+}
+
+.page-github-link a:hover {
+  color: #409EFF;
+}
+
+/* 搜索区域和控件样式 */
+.search-controls-container {
+  position: sticky;
+  top: 0;
+  background-color: #fff;
+  z-index: 100;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 300px;
+  margin: 0;
+}
+
+.view-filter-controls {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 控件组样式 */
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.control-label {
+  font-size: 14px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+/* 视图和筛选控件样式 */
+.view-controls, .filter-controls {
+  display: flex;
+  gap: 6px;
+  background-color: #f5f7fa;
+  border-radius: 20px;
+  padding: 4px;
+}
+
+/* 搜索框样式 */
+:deep(.el-input__inner) {
+  border-radius: 20px;
+}
+
+/* Markdown 内容样式 */
+.markdown-body {
+  transition: max-height 0.3s ease-out;
+  width: 100%;
+  overflow-x: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  border-radius: 8px;
+}
+
+/* Markdown 中的图片样式 */
+.markdown-body img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  background-color: #fff;
+  border-style: none;
+  box-sizing: border-box;
+  margin: 16px 0; /* 调整上下间距 */
+  border: 1px solid #d0d7de; /* GitHub 风格的边框 */
+  border-radius: 8px;
+  box-shadow: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+}
+
+.markdown-body img.loaded {
+  opacity: 1;
+}
+
+/* 确保图片容器样式 */
+.markdown-wrapper {
+  width: 100%;
+  overflow-x: hidden;
+  padding: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+}
+
+/* 优化收起状态的样式 */
+.markdown-body.collapsed {
+  max-height: 300px;
+  overflow: hidden;
+  position: relative;
+}
+
+/* 渐变遮罩效果 */
+.markdown-body.collapsed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 60px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);
+  pointer-events: none;
+  border-radius: 0 0 8px 8px;
+}
+
+/* 展开按钮样式 */
+.expand-button {
+  text-align: center;
+  padding: 8px;
+  color: #0969da; /* GitHub 的链接蓝色 */
+  cursor: pointer;
+  position: relative;
+  margin-top: -20px;
+  z-index: 1;
+  background: none;
+  border: none;
+  font-size: 14px;
+  border-radius: 20px;
+}
+
+.expand-button:hover {
+  color: #1a7f37; /* GitHub 的悬停颜色 */
+  text-decoration: underline;
+}
+
+/* 分页样式 */
+.pagination-container {
+  margin-top: 20px;
+  text-align: center;
+}
+
+/* 标题样式 */
+h2 {
+  margin: 0;
+  margin-bottom: 4px;
+}
+
+/* 日历卡片样式 */
+.calendar-card {
+  margin-top: 16px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* 错误卡片样式 */
+.error-card {
+  margin-bottom: 20px;
+}
+
+/* 搜索框边距 */
+.search-input {
+  margin: 0;
 }
 </style>

@@ -25,13 +25,18 @@
               <el-button
                 type="primary"
                 @click="handleManualRefresh"
-                :loading="loading"
-                class="refresh-button"
+                :loading="false"
+                class="refresh-button progress-button"
+                :class="{'custom-loading': loading}"
                 round
               >
-                刷新数据
+                <div class="button-content">
+                  <span v-if="loading" class="loading-spinner"></span>
+                  <span class="button-text">{{ loading ? `${loadingProgress}%` : '刷新数据' }}</span>
+                </div>
+                <div v-if="loading" class="button-progress" :style="{ width: `${loadingProgress}%` }"></div>
               </el-button>
-              <!-- 进度条 -->
+              <!-- 保留原有进度条 
               <div v-if="loading" class="refresh-progress">
                 <el-progress
                   :percentage="loadingProgress"
@@ -39,7 +44,7 @@
                   :show-text="false"
                   status="success"
                 />
-              </div>
+              </div>-->
             </div>
           </div>
         </div>
@@ -481,9 +486,11 @@ export default {
       if (!this.loading) return {}
 
       return {
-        background: `linear-gradient(to right,
-          var(--el-color-primary) ${this.loadingProgress}%,
-          var(--el-color-primary-light-3) ${this.loadingProgress}%)`
+        background: `linear-gradient(to right, 
+          var(--el-color-primary) 0%, 
+          var(--el-color-primary) ${this.loadingProgress}%, 
+          rgba(144, 147, 153, 0.3) ${this.loadingProgress}%, 
+          rgba(144, 147, 153, 0.3) 100%)`
       }
     }
   },
@@ -610,7 +617,8 @@ export default {
 
         eventSource.onmessage = (event) => {
           const data = JSON.parse(event.data)
-          this.loadingProgress = data.progress
+          // 确保进度值为整数，避免小数点导致的渲染问题
+          this.loadingProgress = Math.round(data.progress)
           this.loadingMessage = data.message
           this.processedRepos = data.processed_repos || 0
           this.totalRepos = data.total_repos || 0
@@ -1401,25 +1409,119 @@ export default {
   width: 100%;
 }
 
+/* 注释掉原有进度条样式
 .refresh-progress {
   margin-top: 4px;
   width: 100%;
 }
+*/
 
-/* 刷新图标特殊样式 */
-.refresh-icon.is-loading {
+/* 新增进度按钮样式 */
+.progress-button {
   position: relative;
-  pointer-events: none;
-  opacity: 0.8;
+  overflow: hidden;
 }
 
-.refresh-icon.is-loading .el-icon {
-  animation: spin 1.5s linear infinite;
+.button-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.button-text {
+  position: relative;
+  z-index: 2;
+  color: white !important; /* 强制文字始终为白色 */
+}
+
+/* 自定义加载状态 */
+.custom-loading {
+  pointer-events: none; /* 防止重复点击 */
+  background-color: rgba(64, 144, 255, 0.3) !important; /* 保持淡蓝色背景 */
+  border-color: transparent !important; /* 移除边框 */
+}
+
+/* 自定义加载动画 */
+.loading-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-radius: 50%;
+  border-top-color: transparent;
+  margin-right: 8px; /* 调整为右边距，使其位于文字左侧 */
+  animation: spin 1s linear infinite;
+  position: relative;
+  z-index: 2;
 }
 
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.button-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background-color:#409eff; /* 主色调进度条 */
+  transition: width 0.3s ease;
+  z-index: 1;
+  border-radius: 20px 0 0 20px; /* 保持左侧圆角 */
+  box-shadow: 0 0 8px rgba(64, 158, 255, 0.5); /* 添加蓝色阴影 */
+}
+
+/* 当宽度达到100%时，右侧也需要圆角 */
+.button-progress[style*="width: 100%"] {
+  border-radius: 20px;
+}
+
+.refresh-button.is-loading {
+  background-color: rgba(64, 144, 255, 0.3) !important; /* 保持淡蓝色背景 */
+  border-color: transparent !important; /* 移除边框 */
+}
+
+/* 添加额外的视觉效果增强对比度 */
+.button-progress::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.2));
+  border-radius: inherit;
+}
+
+/* 确保没有其他加载动画干扰 */
+:deep(.el-button .el-icon) {
+  display: none !important; /* 隐藏所有的 Element 图标 */
+}
+
+:deep(.el-button.is-loading .el-icon),
+:deep(.el-button.is-loading .el-icon.is-loading) {
+  display: none !important; /* 强制隐藏加载图标 */
+}
+
+:deep(.el-button.is-loading)::before {
+  display: none !important; /* 移除原生加载状态的背景遮罩 */
+}
+
+.header-right {
+  position: relative;
+}
+
+/* 确保任何状态下按钮文字都是白色 */
+:deep(.el-button) {
+  color: white;
+}
+
+/* 确保加载状态下图标也是白色 */
+:deep(.el-button.is-loading .el-icon) {
+  color: white !important;
 }
 
 /* Markdown 内容样式 */

@@ -61,6 +61,7 @@ npm install
 
 # 运行效果
 
-![PixPin_2025-05-08_09-32-52](https://github.com/user-attachments/assets/fb20ef68-29b4-4e14-bf89-12a899f7dc98)
+![PixPin_2025-05-08_12-15-23](https://github.com/user-attachments/assets/2efc17c2-de32-4add-a167-efd767de333c)
+
 
 

@@ -45,7 +45,7 @@
         </div>
       </el-card>
 
-      <!-- 搜索区域和控件组 -->
+      <!-- 搜索区域和控件组，移除scrolled类 -->
       <div class="search-controls-container">
         <!-- 搜索框 -->
         <el-input
@@ -305,6 +305,10 @@
                       {{ repo.description }}
                     </p>
                   </div>
+                  <!-- 将发布时间移到这里，与标题相对居中 -->
+                  <div class="release-date-container">
+                    <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
+                  </div>
                 </div>
               </div>
 
@@ -335,7 +339,7 @@
                       正式版
                     </el-tag>
                   </div>
-                  <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
+                  <!-- 移除这里的发布时间 -->
                 </h4>
                 <div v-if="isSourceCodeOnly(repo.latest_release)" class="source-code-notice">
                   <el-tag size="small" type="info">仅包含源代码</el-tag>
@@ -1088,6 +1092,11 @@ export default {
     }
   },
 
+  beforeUnmount() {
+    // 移除滚动事件监听器
+    // window.removeEventListener('scroll', this.handleScroll);
+  },
+
   updated() {
     // 在组件更新后重新添加事件监听器
     this.$nextTick(() => {
@@ -1108,9 +1117,10 @@ export default {
 
 <style scoped>
 .releases-container {
-  max-width: 1600px; /* 进一步增加页面宽度 */
+  max-width: 1600px; /* 保持页面宽度 */
   margin: 0 auto;
   padding: 20px;
+  box-sizing: border-box; /* 确保padding不会增加宽度 */
 }
 
 .header-card {
@@ -1134,11 +1144,19 @@ export default {
   max-width: 300px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 /* 卡片圆角样式 */
 :deep(.el-card) {
   border-radius: 12px;
   overflow: hidden;
   transition: box-shadow 0.3s;
+  width: 100%; /* 所有卡片统一宽度 */
+  box-sizing: border-box;
 }
 
 :deep(.el-card:hover) {
@@ -1177,6 +1195,8 @@ export default {
   flex-wrap: wrap;
   align-items: center;
   gap: 15px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-input {
@@ -1204,646 +1224,6 @@ export default {
   font-size: 14px;
   color: #606266;
   white-space: nowrap;
-}
-
-/* 视图和筛选控件样式 */
-.view-controls, .filter-controls {
-  display: flex;
-  gap: 6px;
-  background-color: #f5f7fa;
-  border-radius: 20px;
-  padding: 4px;
-}
-
-/* 图标按钮样式 */
-.icon-button {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.3s;
-  background-color: transparent;
-  color: #606266;
-}
-
-.icon-button:hover {
-  background-color: #e6e9ed;
-  transform: translateY(-2px);
-}
-
-.icon-button.active {
-  background-color: #409EFF;
-  color: white;
-}
-
-/* 删除page-github-link相关样式，只保留github-footer样式 */
-
-/* GitHub项目链接样式 */
-.github-footer {
-  margin-top: 20px;
-  text-align: center;
-  padding: 15px 0;
-  border-top: 1px solid #eee;
-  border-radius: 0 0 12px 12px;
-  background-color: #f8f9fa;
-}
-
-.github-footer a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #606266;
-  text-decoration: none;
-  transition: color 0.3s;
-  font-size: 14px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  background-color: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.github-footer a:hover {
-  color: #409EFF;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* 仓库卡片圆角 */
-.repo-card {
-  border-radius: 12px;
-  overflow: hidden;
-  transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.repo-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-}
-
-/* 日历视图圆角 */
-.calendar-card {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-/* 错误卡片圆角 */
-.error-card {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-/* 分页器圆角 */
-:deep(.el-pagination .el-pager li) {
-  border-radius: 4px;
-}
-
-:deep(.el-pagination .btn-prev),
-:deep(.el-pagination .btn-next) {
-  border-radius: 4px;
-}
-
-/* 主内容区域左右布局 */
-.main-content {
-  display: flex;
-  gap: 20px;
-}
-
-/* 左侧足迹区域 */
-.footprints-section {
-  width: 300px;
-  flex-shrink: 0;
-}
-
-.footprints-card {
-  position: sticky;
-  top: 20px;
-}
-
-.footprints-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.footprints-content {
-  max-height: calc(100vh - 250px);
-  overflow-y: auto;
-  padding-right: 10px;
-  position: relative;
-}
-
-.footprint-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.footprint-item .repo-name a {
-  color: #303133;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.footprint-item .repo-name a:hover {
-  color: #409EFF;
-  text-decoration: underline;
-}
-
-.release-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logs-empty, .logs-loading {
-  padding: 20px 0;
-  text-align: center;
-  color: #909399;
-}
-
-.logs-pagination {
-  margin-top: 15px;
-  display: flex;
-  justify-content: center;
-}
-
-/* 美化时间线组件 */
-:deep(.el-timeline-item__content) {
-  margin-left: 20px;
-}
-
-:deep(.el-timeline-item__timestamp) {
-  font-size: 12px;
-  color: #909399;
-}
-
-:deep(.el-timeline-item__node--primary) {
-  background-color: #409EFF;
-}
-
-/* 美化滚动条 */
-.footprints-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.footprints-content::-webkit-scrollbar-thumb {
-  background-color: #E4E7ED;
-  border-radius: 2px;
-}
-
-.footprints-content::-webkit-scrollbar-track {
-  background-color: #F5F7FA;
-}
-
-/* 右侧内容区域 */
-.main-section {
-  flex: 1;
-  min-width: 0; /* 防止溢出 */
-}
-
-.repo-card {
-  margin-bottom: 20px;
-}
-
-.repo-header {
-  margin-bottom: 15px;
-}
-
-.repo-header a {
-  color: #409EFF;
-  text-decoration: none;
-}
-
-.release-content {
-  padding: 15px;
-  border-radius: 4px;
-  background-color: #f8f9fa;
-}
-
-.release-date {
-  font-size: 0.9em;
-  color: #666;
-  margin-left: 10px;
-}
-
-.release-footer {
-  margin-top: 15px;
-  text-align: right;
-  border-top: 1px solid #eee;
-  padding-top: 10px;
-}
-
-h4 {
-  margin: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.release-body {
-  margin-top: 10px;
-  padding: 10px;
-  background-color: #fff;
-  border-radius: 4px;
-}
-
-.source-code-notice {
-  margin: 8px 0;
-  color: #909399;
-}
-
-.source-code-notice .el-tag {
-  margin-right: 8px;
-}
-
-.repo-title {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
-}
-
-.repo-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.repo-info {
-  flex: 1;
-}
-
-.repo-info h3 {
-  margin: 0;
-  line-height: 1.4;
-}
-
-.repo-description {
-  margin: 4px 0 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.5;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 0;
-  border-top: 1px solid #eee;
-  flex-wrap: wrap;
-}
-
-.user-avatar {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-}
-
-.username {
-  font-size: 14px;
-  color: #606266;
-}
-
-.logout-btn {
-  color: #F56C6C;
-  padding: 0;
-}
-
-.logout-btn:hover {
-  color: #f78989;
-}
-
-.title-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 添加日历视图相关样式 */
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 16px;
-}
-
-.current-month {
-  font-size: 16px;
-  font-weight: 500;
-  color: #303133;
-}
-
-.calendar-controls {
-  display: flex;
-  gap: 8px;
-}
-
-.calendar-cell {
-  height: 100%;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.3s;
-}
-
-.calendar-cell.today {
-  background-color: rgba(64, 158, 255, 0.1);
-}
-
-.calendar-day {
-  margin: 0;
-  padding: 4px;
-  font-size: 14px;
-  color: #606266;
-  text-align: center;
-}
-
-.calendar-day.weekend {
-  color: #F56C6C;
-}
-
-.calendar-day.other-month {
-  color: #C0C4CC;
-}
-
-.releases-summary {
-  margin-top: 4px;
-  min-height: 40px;
-}
-
-.single-release {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px 8px;
-  background-color: #F2F6FC;
-  border-radius: 4px;
-  transition: all 0.3s;
-  text-decoration: none;
-  color: #409EFF;
-}
-
-.single-release:hover {
-  background-color: #ECF5FF;
-  transform: translateY(-1px);
-}
-
-.single-release-version {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #67C23A;
-}
-
-.multiple-releases {
-  display: inline-block;
-  padding: 4px 8px;
-  background-color: #F0F9EB;
-  color: #67C23A;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.multiple-releases:hover {
-  background-color: #E1F3D8;
-  transform: translateY(-1px);
-}
-
-.releases-list-popup {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.release-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid #EBEEF5;
-  text-decoration: none;
-  color: inherit;
-  transition: background-color 0.3s;
-}
-
-.release-item:last-child {
-  border-bottom: none;
-}
-
-.release-item:hover {
-  background-color: #F5F7FA;
-}
-
-.release-item-content {
-  flex: 1;
-  min-width: 0;
-  margin-right: 12px;
-}
-
-.release-main-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.repo-name {
-  font-weight: 500;
-  color: #303133;
-}
-
-.release-version {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #67C23A;
-  font-size: 12px;
-}
-
-.release-time {
-  font-size: 12px;
-  color: #909399;
-}
-
-.pre-badge {
-  background-color: #E6A23C;
-  color: white;
-  font-size: 10px;
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-weight: normal;
-}
-
-:deep(.el-calendar-table) {
-  border-collapse: separate;
-  border-spacing: 4px;
-}
-
-:deep(.el-calendar-table td) {
-  border: none;
-  padding: 0;
-}
-
-:deep(.el-calendar-table .el-calendar-day) {
-  height: 110px;
-  padding: 0;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  transition: all 0.3s;
-}
-
-:deep(.el-calendar-table .el-calendar-day:hover) {
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* 自定义滚动条样式 */
-.releases-list-popup::-webkit-scrollbar {
-  width: 6px;
-}
-
-.releases-list-popup::-webkit-scrollbar-thumb {
-  background-color: #E4E7ED;
-  border-radius: 3px;
-}
-
-.releases-list-popup::-webkit-scrollbar-track {
-  background-color: #F5F7FA;
-}
-
-/* 弹出框样式 */
-:deep(.releases-popover) {
-  padding: 0;
-  border-radius: 8px;
-}
-
-/* 添加高亮动画效果 */
-@keyframes highlight-pulse {
-  0% { background-color: transparent; }
-  50% { background-color: rgba(64, 158, 255, 0.1); }
-  100% { background-color: transparent; }
-}
-
-.highlight {
-  animation: highlight-pulse 2s ease-in-out;
-}
-
-.refresh-section {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 120px; /* 固定宽度 */
-}
-
-.refresh-button {
-  width: 100%;
-}
-
-.refresh-progress {
-  margin-top: 4px;
-  width: 100%;
-}
-
-/* 添加 release 类型标签样式 */
-.release-type-tag {
-  margin-left: 8px;
-  vertical-align: middle;
-}
-
-/* 新增样式，用于左侧内容对齐 */
-.release-info-left {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* 在链接和标签之间添加一些间距 */
-}
-
-/* 修改：最后活动日期指示器样式 */
-.last-activity-indicator {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  color: #E6A23C; /* 使用一个醒目的颜色 */
-  font-size: 14px;
-  cursor: help;
-}
-
-/* 响应式布局 */
-@media (max-width: 1200px) {
-  .main-content {
-    flex-direction: column;
-  }
-
-  .footprints-section {
-    width: 100%;
-    margin-bottom: 20px;
-  }
-
-  .footprints-content {
-    max-height: 400px;
-  }
-  
-  /* 在较窄屏幕上调整搜索区域布局 */
-  .search-controls-container {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .search-input {
-    width: 100%;
-    margin-bottom: 10px;
-  }
-  
-  .view-filter-controls {
-    width: 100%;
-    justify-content: center;
-  }
-  
-  /* 项目源码链接位置调整 */
-  .page-github-link {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-  }
-}
-
-/* 更小的屏幕 */
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    gap: 15px;
-    align-items: flex-start;
-  }
-  
-  .header-left, .header-right {
-    width: 100%;
-  }
-  
-  .refresh-section {
-    width: 100%;
-  }
-  
-  .page-github-link {
-    padding: 5px 8px;
-  }
-  
-  .page-github-link span {
-    display: none; /* 只显示图标 */
-  }
-}
-
-/* 添加可点击标签的样式 */
-.clickable-tag {
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.clickable-tag:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* 视图和筛选控件样式 */
@@ -1883,11 +1263,116 @@ h4 {
   font-size: 16px;
 }
 
+/* 主内容区域左右布局 */
+.main-content {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 左侧足迹区域 */
+.footprints-section {
+  width: 300px;
+  flex-shrink: 0;
+}
+
+/* 右侧主内容区域 */
+.main-section {
+  flex: 1; /* 占据剩余空间 */
+  min-width: 0; /* 避免flex项目溢出 */
+}
+
+.footprints-card {
+  position: sticky;
+  top: 90px; /* 增加顶部距离，与搜索栏保持更远的距离 */
+}
+
+/* 用户信息样式 */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0;
+  border-top: 1px solid #eee;
+  flex-wrap: wrap;
+}
+
+.user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.username {
+  font-size: 14px;
+  color: #606266;
+}
+
+.logout-btn {
+  color: #F56C6C;
+  padding: 0;
+}
+
+.logout-btn:hover {
+  color: #f78989;
+}
+
+/* 左侧足迹区域 */
+.footprints-card {
+  position: sticky;
+  top: 90px; /* 增加顶部距离，与搜索栏保持更远的距离 */
+}
+
+.footprints-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footprints-content {
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  padding-right: 10px;
+  position: relative;
+}
+
+/* GitHub项目链接样式 */
+.github-footer {
+  margin-top: 20px;
+  text-align: center;
+  padding: 15px 0;
+  border-top: 1px solid #eee;
+  border-radius: 0 0 12px 12px;
+  background-color: #f8f9fa;
+}
+
+.github-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #606266;
+  text-decoration: none;
+  transition: color 0.3s;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.github-footer a:hover {
+  color: #409EFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 刷新相关样式 */
 .refresh-section {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  width: 120px; /* 固定宽度 */
+  width: 120px;
 }
 
 .refresh-button {
@@ -1913,193 +1398,6 @@ h4 {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
-}
-
-.footprints-header {
-}
-
-/* 添加GitHub项目链接样式 */
-.github-footer {
-  margin-top: 20px;
-  text-align: center;
-  padding: 15px 0;
-  border-top: 1px solid #eee;
-}
-
-.github-footer a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #606266;
-  text-decoration: none;
-  transition: color 0.3s;
-  font-size: 14px;
-}
-
-.github-footer a:hover {
-  color: #409EFF;
-}
-
-/* 添加可点击时间的样式 */
-.clickable-time {
-  margin-left: 8px;
-  cursor: pointer;
-  color: #909399;
-  font-size: 12px;
-  transition: all 0.3s;
-}
-
-.clickable-time:hover {
-  color: #409EFF;
-  text-decoration: underline;
-}
-
-/* 时间跳转按钮样式 */
-.time-jump-btn {
-  margin-left: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  color: #909399;
-  transition: all 0.3s;
-}
-
-.time-jump-btn:hover {
-  color: #409EFF;
-}
-
-.time-jump-btn span {
-  font-size: 12px;
-}
-
-/* 为时间轴时间戳添加可点击样式 */
-:deep(.timeline-timestamp-clickable) {
-  cursor: pointer !important;
-  transition: all 0.3s;
-  position: relative;
-  display: inline-block !important;
-}
-
-:deep(.timeline-timestamp-clickable:hover) {
-  color: #409EFF !important;
-  text-decoration: underline;
-}
-
-:deep(.timeline-timestamp-clickable::after) {
-  content: none; /* 移除箭头图标 */
-}
-
-:deep(.timeline-timestamp-clickable:hover::after) {
-  opacity: 1;
-  color: #409EFF;
-}
-
-/* 修改时间轴样式，让内容更紧凑 */
-:deep(.el-timeline-item__wrapper) {
-  padding-left: 24px;
-}
-
-:deep(.el-timeline-item__timestamp) {
-  margin-bottom: 6px;
-  line-height: 1.2;
-}
-
-:deep(.el-timeline-item__tail) {
-  left: 6px;
-}
-
-:deep(.el-timeline-item__node) {
-  left: 6px;
-}
-
-/* 页面右上角的GitHub链接 */
-.page-github-link {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  z-index: 1000;
-  background-color: #fff;
-  padding: 8px 12px;
-  border-radius: 20px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  transition: all 0.3s;
-}
-
-.page-github-link:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
-}
-
-.page-github-link a {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #606266;
-  text-decoration: none;
-  transition: color 0.3s;
-  font-size: 14px;
-}
-
-.page-github-link a:hover {
-  color: #409EFF;
-}
-
-/* 搜索区域和控件样式 */
-.search-controls-container {
-  position: sticky;
-  top: 0;
-  background-color: #fff;
-  z-index: 100;
-  padding: 15px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 15px;
-}
-
-.search-input {
-  flex: 1;
-  min-width: 300px;
-  margin: 0;
-}
-
-.view-filter-controls {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-/* 控件组样式 */
-.control-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 0;
-}
-
-.control-label {
-  font-size: 14px;
-  color: #606266;
-  white-space: nowrap;
-}
-
-/* 视图和筛选控件样式 */
-.view-controls, .filter-controls {
-  display: flex;
-  gap: 6px;
-  background-color: #f5f7fa;
-  border-radius: 20px;
-  padding: 4px;
-}
-
-/* 搜索框样式 */
-:deep(.el-input__inner) {
-  border-radius: 20px;
 }
 
 /* Markdown 内容样式 */
@@ -2197,6 +1495,7 @@ h2 {
 /* 日历卡片样式 */
 .calendar-card {
   margin-top: 16px;
+  margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
 }
 
@@ -2205,8 +1504,227 @@ h2 {
   margin-bottom: 20px;
 }
 
-/* 搜索框边距 */
-.search-input {
-  margin: 0;
+/* 仓库卡片圆角 */
+.repo-card {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  margin-bottom: 20px;
+}
+
+.repo-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.repo-title {
+  display: flex;
+  align-items: center; /* 保持垂直居中对齐 */
+  gap: 12px; /* 调整头像与文字的间距 */
+  position: relative; /* 为绝对定位提供参考 */
+}
+
+.repo-avatar {
+  width: 32px; /* 保持项目头像尺寸 */
+  height: 32px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  align-self: center; /* 确保头像始终垂直居中 */
+}
+
+.repo-info {
+  flex: 1;
+  display: flex; /* 保持flex布局 */
+  flex-direction: column; /* 修改为垂直方向排列 */
+  justify-content: center; /* 垂直居中 */
+}
+
+.repo-info h3 {
+  margin: 0; /* 移除标题的外边距 */
+  margin-bottom: 4px; /* 标题与描述之间的间距 */
+  line-height: 1.4; /* 调整行高 */
+}
+
+.repo-description {
+  margin: 0; /* 移除描述的外边距 */
+  color: #606266;
+  font-size: 14px;
+  overflow: hidden; /* 隐藏溢出部分 */
+  text-overflow: ellipsis; /* 显示省略号 */
+  white-space: nowrap; /* 防止文本换行 */
+  line-height: 1.4; /* 与标题保持一致的行高 */
+}
+
+/* 发布日期容器样式 */
+.release-date-container {
+  margin-left: auto; /* 推到最右侧 */
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.release-date {
+  color: #909399;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 版本信息和状态标签的间距 */
+.release-info-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px; /* 增加标签之间的间距 */
+}
+
+.release-type-tag {
+  margin-left: 10px; /* 增加版本和标签之间的间距 */
+}
+
+/* 调整足迹项目布局 */
+.footprint-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.footprint-item .repo-name {
+  margin-right: 12px; /* 增加项目名称和标签之间的间距 */
+  flex: 1;
+}
+
+.footprint-item .release-info {
+  flex-shrink: 0;
+  margin-left: 8px; /* 增加左边距 */
+}
+
+/* 添加可点击标签的样式 */
+.clickable-tag {
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.clickable-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 为时间轴时间戳添加可点击样式 */
+:deep(.timeline-timestamp-clickable) {
+  cursor: pointer !important;
+  transition: all 0.3s;
+  position: relative;
+  display: inline-block !important;
+}
+
+:deep(.timeline-timestamp-clickable:hover) {
+  color: #409EFF !important;
+  text-decoration: underline;
+}
+
+:deep(.timeline-timestamp-clickable::after) {
+  content: none; /* 移除箭头图标 */
+}
+
+:deep(.timeline-timestamp-clickable:hover::after) {
+  opacity: 1;
+  color: #409EFF;
+}
+
+/* 修改时间轴样式，让内容更紧凑 */
+:deep(.el-timeline-item__wrapper) {
+  padding-left: 24px;
+}
+
+:deep(.el-timeline-item__timestamp) {
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+:deep(.el-timeline-item__tail) {
+  left: 6px;
+}
+
+:deep(.el-timeline-item__node) {
+  left: 6px;
+}
+
+/* 分页器圆角 */
+:deep(.el-pagination .el-pager li) {
+  border-radius: 4px;
+}
+
+:deep(.el-pagination .btn-prev),
+:deep(.el-pagination .btn-next) {
+  border-radius: 4px;
+}
+
+/* 响应式布局 */
+@media (max-width: 1200px) {
+  .main-content {
+    flex-direction: column;
+  }
+
+  .footprints-section {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .main-section {
+    width: 100%; /* 在小屏幕上占据全宽 */
+  }
+  
+  .search-controls-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-input {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .view-filter-controls {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .footprints-content {
+    max-height: 400px;
+  }
+}
+
+/* 更小的屏幕 */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+  }
+  
+  .header-left, .header-right {
+    width: 100%;
+  }
+  
+  .refresh-section {
+    width: 100%;
+  }
+  
+  .control-group {
+    margin-bottom: 8px;
+  }
+
+  .repo-info {
+    /* 已经是垂直布局，不需要改变 */
+  }
+  
+  .repo-description {
+    white-space: normal; /* 小屏幕上允许文本换行 */
+    -webkit-line-clamp: 2; /* 最多显示两行 */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    white-space: normal;
+  }
 }
 </style>

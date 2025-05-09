@@ -117,82 +117,14 @@
 
       <!-- 主内容区域使用左右布局 -->
       <div class="main-content">
-        <!-- 左侧足迹区域 -->
+        <!-- 左侧足迹区域，使用新组件 -->
         <div class="footprints-section">
-          <el-card class="footprints-card">
-            <template #header>
-              <div class="footprints-header">
-                <span>关注轨迹</span>
-                <div class="footprints-actions">
-                  <!-- 添加跳转到最后浏览时间的按钮 -->
-                  <el-tooltip content="跳转到最后浏览" placement="top">
-                    <div
-                        class="icon-button last-activity-btn"
-                        @click="jumpToLastActivity"
-                    >
-                      <AppIcon name="position"/>
-                    </div>
-                  </el-tooltip>
-                  <el-tooltip content="刷新记录" placement="top">
-                    <div
-                        class="icon-button refresh-icon"
-                        :class="{ 'is-loading': logsLoading }"
-                        @click="fetchClickLogs(1)"
-                    >
-                      <AppIcon name="refresh"/>
-                      <span v-if="logsLoading" class="loading-indicator"></span>
-                    </div>
-                  </el-tooltip>
-                </div>
-              </div>
-            </template>
-
-            <div v-if="logsLoading" class="logs-loading">加载中...</div>
-            <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false"/>
-            <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有关注轨迹哦！</div>
-            <div v-else class="footprints-content">
-              <el-timeline>
-                <el-timeline-item
-                    v-for="log in clickLogs"
-                    :key="log.id"
-                    :timestamp="formatLogTime(log.click_time)"
-                    placement="top"
-                    type="primary"
-                >
-                  <div class="footprint-item">
-                    <div class="repo-name">
-                      <a :href="`https://github.com/${log.repo_name}`" target="_blank">
-                        {{ log.repo_name.split('/')[1] }}
-                      </a>
-                    </div>
-                    <div class="release-info">
-                      <el-tag
-                          size="small"
-                          type="success"
-                          class="clickable-tag"
-                          @click="goToRelease(log.repo_name, log.release_tag)"
-                      >{{ log.release_tag }}
-                      </el-tag>
-                    </div>
-                  </div>
-                </el-timeline-item>
-              </el-timeline>
-
-              <!-- 足迹分页器 -->
-              <div v-if="logsTotal > logsPageSize" class="logs-pagination">
-                <el-pagination
-                    small
-                    background
-                    @current-change="handleLogsPageChange"
-                    :current-page="logsCurrentPage"
-                    :page-size="logsPageSize"
-                    layout="prev, pager, next"
-                    :total="logsTotal"
-                >
-                </el-pagination>
-              </div>
-            </div>
-          </el-card>
+          <footprints-panel 
+            :access-token="accessToken"
+            :last-activity-time="lastActivityTime"
+            @jump-to-time="handleJumpToTime"
+            @record-click="recordClick"
+          />
         </div>
 
         <!-- 右侧主内容区域 -->
@@ -494,82 +426,12 @@
         width="60%"
         :close-on-click-modal="false"
     >
-      <div v-loading="rssLoading">
-        <div v-if="rssMode === 'single'" class="single-rss-container">
-          <p>您可以使用以下链接订阅 {{ currentRepoName }} 的 Releases:</p>
-          <div class="rss-link-container">
-            <el-input v-model="singleRssLink" readonly></el-input>
-            <el-button type="primary" @click="copyToClipboard(singleRssLink)">复制</el-button>
-          </div>
-        </div>
-        <div v-else-if="rssMode === 'batch'" class="batch-rss-container">
-          <div class="batch-rss-header">
-            <div class="batch-info">
-              <p>已为您生成 {{ rssTotal }} 个订阅链接：</p>
-              <el-tag v-if="rssFromCache" size="small" type="success">从缓存加载</el-tag>
-              <el-tag v-else size="small" type="primary">实时获取</el-tag>
-            </div>
-            <div class="batch-actions">
-              <el-button size="small" type="primary" @click="copyAllRssLinks">一键复制所有链接</el-button>
-              <el-button size="small" type="success" @click="downloadOpml">下载 OPML 文件</el-button>
-              <el-button size="small" type="warning" @click="handleBatchRss(true)">刷新链接</el-button>
-            </div>
-          </div>
-
-          <!-- 添加搜索框 -->
-          <div class="rss-search-box">
-            <el-input
-                v-model="rssSearchQuery"
-                placeholder="搜索仓库名称..."
-                prefix-icon="el-icon-search"
-                clearable
-                @input="rssCurrentPage = 1"
-            ></el-input>
-          </div>
-
-          <el-table
-              :data="paginatedRssLinks"
-              style="width: 100%"
-              height="350px"
-              border
-          >
-            <el-table-column prop="repo_name" label="仓库名称" width="180">
-              <template slot-scope="scope">
-                <a :href="`https://github.com/${scope.row.repo_name}`" target="_blank" class="repo-name-link">
-                  {{ scope.row.repo_name }}
-                </a>
-              </template>
-            </el-table-column>
-            <el-table-column prop="rss_link" label="RSS 链接" show-overflow-tooltip>
-              <template slot-scope="scope">
-                <div class="table-rss-link">
-                  <span>{{ scope.row.rss_link }}</span>
-                  <el-button
-                      size="mini"
-                      type="text"
-                      @click="copyToClipboard(scope.row.rss_link)"
-                      icon="el-icon-document-copy"
-                  >复制
-                  </el-button>
-                </div>
-              </template>
-            </el-table-column>
-          </el-table>
-          
-          <!-- 添加分页器 -->
-          <div class="rss-pagination">
-            <el-pagination
-              @size-change="handleRssSizeChange"
-              @current-change="handleRssCurrentChange"
-              :current-page="rssCurrentPage"
-              :page-sizes="[10, 20, 50, 100]"
-              :page-size="rssPageSize"
-              layout="total, sizes, prev, pager, next, jumper"
-              :total="filteredRssLinks.length">
-            </el-pagination>
-          </div>
-        </div>
-      </div>
+      <rss-links-list
+        :access-token="accessToken"
+        :rss-mode="rssMode"
+        :repo-name="currentRepoName"
+        :single-rss-link="singleRssLink"
+      />
     </el-dialog>
 
     <!-- 添加大图预览模态框 -->
@@ -597,13 +459,17 @@ import GitHubLogin from '@/auth/GitHubLogin.vue'  // 修改导入路径
 import {zhCN} from 'date-fns/locale'
 import {API_ENDPOINTS} from '@/api/config'  // 导入 API 配置
 import GitHubLogo from '@/components/GitHubLogo.vue'  // 导入 GitHubLogo 组件
+import FootprintsPanel from '@/components/FootprintsPanel.vue'  // 导入关注轨迹组件
+import RssLinksList from '@/components/RssLinksList.vue'  // 导入RSS链接列表组件
 
 export default {
   name: 'StarredReleases',
 
   components: {
     'github-login': GitHubLogin,  // 确保组件名称匹配模板中使用的名称
-    GitHubLogo  // 确保组件名称匹配模板中使用的名称
+    GitHubLogo,  // 确保组件名称匹配模板中使用的名称
+    FootprintsPanel,  // 添加关注轨迹组件
+    RssLinksList  // 添加RSS链接列表组件
   },
 
   data() {
@@ -651,7 +517,7 @@ export default {
       rssFromCache: false, // 添加一个标记表示RSS数据是否来自缓存
       rssCurrentPage: 1, // 当前RSS分页
       rssPageSize: 10,   // RSS每页显示数量
-      rssTotal: 0,       // RSS总数量
+      rssTotal: 0,       // RSS总数量,
     }
   },
 
@@ -1326,7 +1192,7 @@ export default {
     async copyRssLink(repoName) {
       this.rssMode = 'single';
       this.currentRepoName = repoName;
-      this.rssLoading = true;
+      this.singleRssLink = ''; // 清空之前的链接
       this.rssDialogVisible = true;
 
       try {
@@ -1339,114 +1205,13 @@ export default {
       } catch (error) {
         console.error('获取RSS链接失败:', error);
         this.$message.error('获取RSS链接失败');
-      } finally {
-        this.rssLoading = false;
       }
     },
 
-    // 修改批量获取RSS链接方法
-    async handleBatchRss(forceRefresh = false) {
+    // 显示批量RSS链接对话框
+    handleBatchRss() {
       this.rssMode = 'batch';
-      this.rssLoading = true;
       this.rssDialogVisible = true;
-      this.batchRssLinks = [];
-      this.rssFromCache = false;
-      this.rssCurrentPage = 1; // 重置页码
-      
-      try {
-        // 如果是强制刷新，则先检查是否需要更新
-        if (forceRefresh) {
-          try {
-            // 调用检查更新接口
-            const checkResponse = await axios.get(API_ENDPOINTS.CHECK_RSS_UPDATES, {
-              headers: {
-                Authorization: `Bearer ${this.accessToken}`
-              }
-            });
-            
-            if (checkResponse.data.status === 'success') {
-              const updateInfo = checkResponse.data;
-              
-              // 如果不需要更新，显示提示并直接获取RSS链接
-              if (!updateInfo.need_update) {
-                this.$message({
-                  type: 'info',
-                  message: `RSS链接已是最新，上次更新时间: ${this.formatLastUpdate(updateInfo.last_update)}`
-                });
-                // 不执行刷新，直接获取链接
-                forceRefresh = false;
-              } else {
-                // 需要更新，显示确认对话框
-                const updates = updateInfo.updates;
-                const confirmMessage = `
-                  检测到仓库变动，是否刷新RSS链接？
-                  • 新增仓库: ${updates.new_repos}个
-                  • 移除仓库: ${updates.removed_repos}个
-                  • 保持不变: ${updates.unchanged}个
-                  • 上次更新: ${this.formatLastUpdate(updateInfo.last_update)}
-                `;
-                
-                try {
-                  await this.$confirm(confirmMessage, '提示', {
-                    confirmButtonText: '立即刷新',
-                    cancelButtonText: '取消',
-                    type: 'warning'
-                  });
-                } catch (e) {
-                  // 用户取消，不执行刷新
-                  this.rssLoading = false;
-                  forceRefresh = false;
-                  // 还需要获取链接
-                }
-              }
-            }
-          } catch (error) {
-            console.error('检查RSS更新状态失败:', error);
-            this.$message.warning('无法检查RSS更新状态，将直接刷新');
-          }
-        }
-
-        // 如果仍然需要强制刷新，调用刷新接口
-        if (forceRefresh) {
-          try {
-            await axios.post(API_ENDPOINTS.REFRESH_RSS_LINKS, {}, {
-              headers: {
-                Authorization: `Bearer ${this.accessToken}`
-              }
-            });
-          } catch (error) {
-            console.error('刷新RSS链接失败:', error);
-            this.$message.error('刷新RSS链接失败');
-            this.rssLoading = false;
-            return;
-          }
-        }
-
-        // 获取RSS链接
-        const response = await axios.get(API_ENDPOINTS.ALL_STARRED_RSS, {
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`
-          }
-        });
-
-        if (response.data.status === 'success') {
-          this.batchRssLinks = response.data.data;
-          this.rssTotal = response.data.total || this.batchRssLinks.length;
-          this.rssFromCache = response.data.from_cache || false;
-          
-          // 如果强制刷新成功，显示提示
-          if (forceRefresh) {
-            this.$message.success(`成功刷新 ${this.rssTotal} 个RSS链接`);
-          }
-        } else {
-          this.$message.error('获取RSS链接失败');
-        }
-      } catch (error) {
-        console.error('批量获取RSS链接失败:', error);
-        this.$message.error('批量获取RSS链接失败');
-      } finally {
-        this.rssLoading = false;
-      }
     },
 
     // 格式化最后更新时间
@@ -1649,6 +1414,15 @@ export default {
     handleRssSizeChange(val) {
       this.rssPageSize = val;
       this.rssCurrentPage = 1;
+    },
+
+    // 处理从FootprintsPanel组件传递过来的跳转事件
+    handleJumpToTime(timeStr) {
+      if (this.viewMode === 'list') {
+        this.jumpToNearestTimeInList(timeStr);
+      } else if (this.viewMode === 'calendar') {
+        this.jumpToDateInCalendar(timeStr);
+      }
     },
   },
 

@@ -319,11 +319,9 @@
                         {{ repo.repo_name }}
                       </a>
                       <el-tooltip content="复制RSS链接" placement="top">
-                        <AppIcon 
-                          name="link" 
-                          class="rss-icon" 
-                          @click.native.stop="copyToClipboard(`https://github.com/${repo.repo_name}/releases.atom`)"
-                        />
+                        <div class="rss-icon-container" @mouseenter="setHoverRepo(repo.repo_name)" @mouseleave="setHoverRepo(null)" @click.stop="copyToClipboard(`https://github.com/${repo.repo_name}/releases.atom`)">
+                          <img :src="isHoverRepo(repo.repo_name) ? '/rss_true.png' : '/rss_false.png'" class="rss-icon" alt="RSS" />
+                        </div>
                       </el-tooltip>
                     </h3>
                     <p v-if="repo.description" class="repo-description">
@@ -539,6 +537,7 @@ export default {
       batchRssLinks: [],
       rssSearchQuery: '', // 添加RSS搜索查询
       highlightCalendarDate: null, // 需要在日历中高亮显示的日期
+      hoverRepoName: null, // 添加鼠标悬浮的仓库名
     }
   },
 
@@ -1347,6 +1346,16 @@ export default {
         console.error('跳转到日历日期失败:', error);
         this.$message.error('日期跳转失败，请重试');
       }
+    },
+
+    // 设置当前悬浮的仓库名
+    setHoverRepo(repoName) {
+      this.hoverRepoName = repoName;
+    },
+    
+    // 判断是否是当前悬浮的仓库
+    isHoverRepo(repoName) {
+      return this.hoverRepoName === repoName;
     },
   },
 
@@ -2569,17 +2578,21 @@ h2 {
 }
 
 /* RSS图标样式 */
-.rss-icon {
+.rss-icon-container {
+  display: inline-flex;
   margin-left: 6px;
-  font-size: 14px;
-  color: #ff9900;
   cursor: pointer;
   transition: all 0.3s;
 }
 
-.rss-icon:hover {
+.rss-icon-container:hover {
   transform: scale(1.2);
-  color: #e67e22;
+}
+
+.rss-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 
 /* RSS搜索框样式 */

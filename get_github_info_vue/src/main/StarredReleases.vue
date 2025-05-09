@@ -1,7 +1,7 @@
 <template>
   <div class="releases-container">
     <!-- 未登录时显示登录组件 -->
-    <github-login v-if="!isAuthenticated" />
+    <github-login v-if="!isAuthenticated"/>
 
     <!-- 登录后显示主内容 -->
     <template v-else>
@@ -13,14 +13,16 @@
               <h2>GitHub Starred Releases</h2>
               <div class="user-info" v-if="userInfo">
                 <img :src="userInfo.avatar_url" class="user-avatar" :alt="userInfo.login">
-                <a :href="'https://github.com/' + userInfo.login" target="_blank" class="username">{{ userInfo.login }}</a>
-                <el-button 
-                  type="danger" 
-                  size="mini" 
-                  @click="handleLogout" 
-                  class="logout-btn" 
-                  icon="el-icon-switch-button"
-                  round
+                <a :href="'https://github.com/' + userInfo.login" target="_blank" class="username">{{
+                    userInfo.login
+                  }}</a>
+                <el-button
+                    type="danger"
+                    size="mini"
+                    @click="handleLogout"
+                    class="logout-btn"
+                    icon="el-icon-switch-button"
+                    round
                 >
                   退出登录
                 </el-button>
@@ -32,22 +34,22 @@
           <div class="header-right">
             <div class="action-buttons">
               <el-tooltip content="批量获取RSS链接" placement="top">
-                <el-button 
-                  size="small"
-                  @click="handleBatchRss"
-                  :disabled="loading"
-                  icon="el-icon-link"
-                  circle
+                <el-button
+                    size="small"
+                    @click="handleBatchRss"
+                    :disabled="loading"
+                    icon="el-icon-link"
+                    circle
                 ></el-button>
               </el-tooltip>
               <div class="refresh-section">
                 <el-button
-                  type="primary"
-                  @click="handleManualRefresh"
-                  :loading="false"
-                  class="refresh-button progress-button"
-                  :class="{'custom-loading': loading}"
-                  round
+                    type="primary"
+                    @click="handleManualRefresh"
+                    :loading="false"
+                    class="refresh-button progress-button"
+                    :class="{'custom-loading': loading}"
+                    round
                 >
                   <div class="button-content">
                     <span v-if="loading" class="loading-spinner"></span>
@@ -79,12 +81,12 @@
             <div class="view-controls">
               <el-tooltip content="列表视图" placement="top">
                 <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
-                  <AppIcon name="tickets" />
+                  <AppIcon name="tickets"/>
                 </div>
               </el-tooltip>
               <el-tooltip content="日历视图" placement="top">
                 <div class="icon-button" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
-                  <AppIcon name="date" />
+                  <AppIcon name="date"/>
                 </div>
               </el-tooltip>
             </div>
@@ -95,17 +97,17 @@
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
                 <div class="icon-button" :class="{ active: filterType === 'all' }" @click="filterType = 'all'">
-                  <AppIcon name="document" />
+                  <AppIcon name="document"/>
                 </div>
               </el-tooltip>
               <el-tooltip content="仅源代码（无下载内容）" placement="top">
                 <div class="icon-button" :class="{ active: filterType === 'source' }" @click="filterType = 'source'">
-                  <AppIcon name="document-delete" />
+                  <AppIcon name="document-delete"/>
                 </div>
               </el-tooltip>
               <el-tooltip content="包含二进制" placement="top">
                 <div class="icon-button" :class="{ active: filterType === 'binary' }" @click="filterType = 'binary'">
-                  <AppIcon name="download" />
+                  <AppIcon name="download"/>
                 </div>
               </el-tooltip>
             </div>
@@ -125,19 +127,19 @@
                   <!-- 添加跳转到最后浏览时间的按钮 -->
                   <el-tooltip content="跳转到最后浏览" placement="top">
                     <div
-                      class="icon-button last-activity-btn"
-                      @click="jumpToLastActivity"
+                        class="icon-button last-activity-btn"
+                        @click="jumpToLastActivity"
                     >
-                      <AppIcon name="position" />
+                      <AppIcon name="position"/>
                     </div>
                   </el-tooltip>
                   <el-tooltip content="刷新足迹" placement="top">
                     <div
-                      class="icon-button refresh-icon"
-                      :class="{ 'is-loading': logsLoading }"
-                      @click="fetchClickLogs(1)"
+                        class="icon-button refresh-icon"
+                        :class="{ 'is-loading': logsLoading }"
+                        @click="fetchClickLogs(1)"
                     >
-                      <AppIcon name="refresh" />
+                      <AppIcon name="refresh"/>
                       <span v-if="logsLoading" class="loading-indicator"></span>
                     </div>
                   </el-tooltip>
@@ -146,16 +148,16 @@
             </template>
 
             <div v-if="logsLoading" class="logs-loading">加载中...</div>
-            <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false" />
+            <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false"/>
             <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有留下任何足迹哦！</div>
             <div v-else class="footprints-content">
               <el-timeline>
                 <el-timeline-item
-                  v-for="log in clickLogs"
-                  :key="log.id"
-                  :timestamp="formatLogTime(log.click_time)"
-                  placement="top"
-                  type="primary"
+                    v-for="log in clickLogs"
+                    :key="log.id"
+                    :timestamp="formatLogTime(log.click_time)"
+                    placement="top"
+                    type="primary"
                 >
                   <div class="footprint-item">
                     <div class="repo-name">
@@ -165,11 +167,12 @@
                     </div>
                     <div class="release-info">
                       <el-tag
-                        size="small"
-                        type="success"
-                        class="clickable-tag"
-                        @click="goToRelease(log.repo_name, log.release_tag)"
-                      >{{ log.release_tag }}</el-tag>
+                          size="small"
+                          type="success"
+                          class="clickable-tag"
+                          @click="goToRelease(log.repo_name, log.release_tag)"
+                      >{{ log.release_tag }}
+                      </el-tag>
                     </div>
                   </div>
                 </el-timeline-item>
@@ -178,13 +181,13 @@
               <!-- 足迹分页器 -->
               <div v-if="logsTotal > logsPageSize" class="logs-pagination">
                 <el-pagination
-                  small
-                  background
-                  @current-change="handleLogsPageChange"
-                  :current-page="logsCurrentPage"
-                  :page-size="logsPageSize"
-                  layout="prev, pager, next"
-                  :total="logsTotal"
+                    small
+                    background
+                    @current-change="handleLogsPageChange"
+                    :current-page="logsCurrentPage"
+                    :page-size="logsPageSize"
+                    layout="prev, pager, next"
+                    :total="logsTotal"
                 >
                 </el-pagination>
               </div>
@@ -203,15 +206,16 @@
                   <el-button size="small" @click="handlePrevMonth" class="calendar-control-btn">上个月</el-button>
                   <el-button size="small" @click="handleNextMonth" class="calendar-control-btn">下个月</el-button>
                 </el-button-group>
-                <el-button size="small" type="primary" @click="handleToday" class="calendar-control-btn">今天</el-button>
+                <el-button size="small" type="primary" @click="handleToday" class="calendar-control-btn">今天
+                </el-button>
               </div>
             </div>
             <el-calendar v-model="calendarDate">
               <!-- 不使用原有的header插槽 -->
               <template #dateCell="{ data }">
-                <div class="calendar-cell" :class="{ 
+                <div class="calendar-cell" :class="{
                   'today': isToday(data.day),
-                  'highlight-calendar-cell': data.day === highlightCalendarDate 
+                  'highlight-calendar-cell': data.day === highlightCalendarDate
                 }">
                   <p :class="{
                     'calendar-day': true,
@@ -223,15 +227,15 @@
                   <div class="releases-summary">
                     <template v-if="getReleasesForDate(data.day).length > 0">
                       <el-tooltip
-                        v-if="getReleasesForDate(data.day).length === 1"
-                        :content="getReleasesForDate(data.day)[0].repo_name"
-                        placement="top"
+                          v-if="getReleasesForDate(data.day).length === 1"
+                          :content="getReleasesForDate(data.day)[0].repo_name"
+                          placement="top"
                       >
                         <a
-                          class="single-release"
-                          :href="getReleasesForDate(data.day)[0].latest_release.html_url"
-                          target="_blank"
-                          @click="recordClick(getReleasesForDate(data.day)[0].repo_name, getReleasesForDate(data.day)[0].latest_release.tag_name, getReleasesForDate(data.day)[0].latest_release.published_at)"
+                            class="single-release"
+                            :href="getReleasesForDate(data.day)[0].latest_release.html_url"
+                            target="_blank"
+                            @click="recordClick(getReleasesForDate(data.day)[0].repo_name, getReleasesForDate(data.day)[0].latest_release.tag_name, getReleasesForDate(data.day)[0].latest_release.published_at)"
                         >
                           {{ getReleasesForDate(data.day)[0].repo_name.split('/')[1] }}
                           <span class="single-release-version">
@@ -242,11 +246,11 @@
                         </a>
                       </el-tooltip>
                       <el-popover
-                        v-else
-                        placement="top"
-                        trigger="hover"
-                        :width="280"
-                        popper-class="releases-popover"
+                          v-else
+                          placement="top"
+                          trigger="hover"
+                          :width="280"
+                          popper-class="releases-popover"
                       >
                         <template #reference>
                           <div class="multiple-releases">
@@ -255,12 +259,12 @@
                         </template>
                         <div class="releases-list-popup">
                           <a
-                            v-for="release in getReleasesForDate(data.day)"
-                            :key="release.repo_name"
-                            class="release-item"
-                            target="_blank"
-                            :href="release.latest_release.html_url"
-                            @click="recordClick(release.repo_name, release.latest_release.tag_name, release.latest_release.published_at)"
+                              v-for="release in getReleasesForDate(data.day)"
+                              :key="release.repo_name"
+                              class="release-item"
+                              target="_blank"
+                              :href="release.latest_release.html_url"
+                              @click="recordClick(release.repo_name, release.latest_release.tag_name, release.latest_release.published_at)"
                           >
                             <div class="release-item-content">
                               <div class="release-main-info">
@@ -274,9 +278,9 @@
                               <div class="release-time">{{ formatTime(release.latest_release.published_at) }}</div>
                             </div>
                             <a
-                              class="release-detail-link"
-                              :href="release.latest_release.html_url"
-                              target="_blank"
+                                class="release-detail-link"
+                                :href="release.latest_release.html_url"
+                                target="_blank"
                             >
                               查看详情
                             </a>
@@ -287,7 +291,7 @@
                     <!-- 修改：最后活动提示 -->
                     <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
                       <el-tooltip content="上次活动" placement="top">
-                        <AppIcon name="user" />
+                        <AppIcon name="user"/>
                       </el-tooltip>
                     </div>
                   </div>
@@ -307,31 +311,34 @@
           <!-- 仓库列表 -->
           <div v-else-if="viewMode === 'list'" class="releases-list">
             <el-card
-              v-for="repo in paginatedRepos"
-              :key="repo.repo_name"
-              :data-repo-name="repo.repo_name"
-              class="repo-card"
+                v-for="repo in paginatedRepos"
+                :key="repo.repo_name"
+                :data-repo-name="repo.repo_name"
+                class="repo-card"
             >
               <div class="repo-header">
                 <div class="repo-title">
                   <img
-                    v-if="repo.avatar_url"
-                    :src="repo.avatar_url"
-                    class="repo-avatar"
-                    :alt="repo.repo_name"
+                      v-if="repo.avatar_url"
+                      :src="repo.avatar_url"
+                      class="repo-avatar"
+                      :alt="repo.repo_name"
                   />
                   <div class="repo-info">
                     <h3>
                       <a
-                        :href="'https://github.com/' + repo.repo_name"
-                        target="_blank"
-                        @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                          :href="'https://github.com/' + repo.repo_name"
+                          target="_blank"
+                          @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
                       >
                         {{ repo.repo_name }}
                       </a>
                       <el-tooltip content="复制RSS链接" placement="top">
-                        <div class="rss-icon-container" @mouseenter="setHoverRepo(repo.repo_name)" @mouseleave="setHoverRepo(null)" @click.stop="copyToClipboard(`https://github.com/${repo.repo_name}/releases.atom`)">
-                          <img :src="isHoverRepo(repo.repo_name) ? '/rss_true.png' : '/rss_false.png'" class="rss-icon" alt="RSS" />
+                        <div class="rss-icon-container" @mouseenter="setHoverRepo(repo.repo_name)"
+                             @mouseleave="setHoverRepo(null)"
+                             @click.stop="copyToClipboard(`https://github.com/${repo.repo_name}/releases.atom`)">
+                          <img :src="isHoverRepo(repo.repo_name) ? '/rss_true.png' : '/rss_false.png'" class="rss-icon"
+                               alt="RSS"/>
                         </div>
                       </el-tooltip>
                     </h3>
@@ -346,20 +353,20 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <!-- 添加收藏数和趋势图 -->
                 <div class="repo-stats">
 
-                <!-- 趋势图 -->
+                  <!-- 趋势图 -->
                   <el-popover
-                    placement="bottom"
-                    trigger="hover"
-                    width="330"
-                    popper-class="trends-popover"
+                      placement="bottom"
+                      trigger="hover"
+                      width="330"
+                      popper-class="trends-popover"
                   >
                     <template #reference>
                       <div class="trends-icon">
-                        <img src="/trend.png" class="trend-icon" alt="趋势" />
+                        <img src="/trend.png" class="trend-icon" alt="趋势"/>
                       </div>
                     </template>
                     <div class="trend-container">
@@ -370,11 +377,12 @@
                       </div>
                       <div class="trend-content">
                         <!-- 使用star-history的SVG趋势图，点击查看大图 -->
-                        <div class="trend-history-container" @click="showLargeImageDialog(repo.repo_name, `https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`)">
-                          <img 
-                            :src="`https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`" 
-                            class="trend-history"
-                            :alt="`${repo.repo_name} Star历史`"
+                        <div class="trend-history-container"
+                             @click="showLargeImageDialog(repo.repo_name, `https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`)">
+                          <img
+                              :src="`https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`"
+                              class="trend-history"
+                              :alt="`${repo.repo_name} Star历史`"
                           />
                           <div class="view-large-overlay">
                             <span>点击查看大图</span>
@@ -386,12 +394,12 @@
                   <!-- 收藏数 -->
                   <el-tooltip content="收藏数" placement="top">
                     <div class="stars-count">
-                      <img src="/collect.png" class="star-icon" alt="收藏" />
+                      <img src="/collect.png" class="star-icon" alt="收藏"/>
                       <span class="star-count-value">{{ formatStarCount(repo.stargazers_count) }}</span>
                     </div>
                   </el-tooltip>
-                  
-                  
+
+
                 </div>
               </div>
 
@@ -399,25 +407,25 @@
                 <h4>
                   <div class="release-info-left">
                     <a
-                      :href="repo.latest_release.html_url"
-                      target="_blank"
-                      @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                        :href="repo.latest_release.html_url"
+                        target="_blank"
+                        @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
                     >
                       {{ repo.latest_release.name || repo.latest_release.tag_name }}
                     </a>
                     <el-tag
-                      v-if="isPreRelease(repo.latest_release)"
-                      size="small"
-                      type="warning"
-                      class="release-type-tag"
+                        v-if="isPreRelease(repo.latest_release)"
+                        size="small"
+                        type="warning"
+                        class="release-type-tag"
                     >
                       预发布
                     </el-tag>
                     <el-tag
-                      v-else
-                      size="small"
-                      type="success"
-                      class="release-type-tag"
+                        v-else
+                        size="small"
+                        type="success"
+                        class="release-type-tag"
                     >
                       正式版
                     </el-tag>
@@ -429,22 +437,22 @@
                 </div>
                 <div class="markdown-wrapper" v-if="repo.latest_release.body">
                   <div
-                    class="markdown-body"
-                    :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
-                    v-html="renderMarkdown(repo.latest_release.body)"
+                      class="markdown-body"
+                      :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
+                      v-html="renderMarkdown(repo.latest_release.body)"
                   ></div>
                   <div
-                    class="expand-button"
-                    v-if="needsExpansion(repo.latest_release.body)"
-                    @click="toggleExpand(repo.repo_name)"
+                      class="expand-button"
+                      v-if="needsExpansion(repo.latest_release.body)"
+                      @click="toggleExpand(repo.repo_name)"
                   >
                     {{ expandedRepos.includes(repo.repo_name) ? '收起' : '展开' }}
                   </div>
                 </div>
                 <div class="release-footer">
                   <el-button
-                    type="text"
-                    @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                      type="text"
+                      @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
                   >
                     查看所有版本
                   </el-button>
@@ -456,24 +464,24 @@
           <!-- 分页器 -->
           <div v-if="viewMode === 'list'" class="pagination-container">
             <el-pagination
-              background
-              @size-change="handleSizeChange"
-              @current-change="handleCurrentChange"
-              :current-page="currentPage"
-              :page-sizes="[10, 20, 50, 100]"
-              :page-size="pageSize"
-              layout="total, sizes, prev, pager, next, jumper"
-              :total="filteredRepos.length"
+                background
+                @size-change="handleSizeChange"
+                @current-change="handleCurrentChange"
+                :current-page="currentPage"
+                :page-sizes="[10, 20, 50, 100]"
+                :page-size="pageSize"
+                layout="total, sizes, prev, pager, next, jumper"
+                :total="filteredRepos.length"
             >
             </el-pagination>
           </div>
         </div>
       </div>
-      
+
       <!-- 添加GitHub项目链接，移到main-content外部 -->
       <div class="github-footer">
         <a href="https://github.com/xiaocuanChina/get_github_releases_info" target="_blank">
-          <GitHubLogo :size="24" />
+          <GitHubLogo :size="24"/>
           访问 GitHub 项目仓库
         </a>
       </div>
@@ -481,10 +489,10 @@
 
     <!-- 添加 RSS 对话框 -->
     <el-dialog
-      title="RSS 订阅链接"
-      :visible.sync="rssDialogVisible"
-      width="60%"
-      :close-on-click-modal="false"
+        title="RSS 订阅链接"
+        :visible.sync="rssDialogVisible"
+        width="60%"
+        :close-on-click-modal="false"
     >
       <div v-loading="rssLoading">
         <div v-if="rssMode === 'single'" class="single-rss-container">
@@ -502,34 +510,35 @@
               <el-button size="small" type="success" @click="downloadOpml">下载 OPML 文件</el-button>
             </div>
           </div>
-          
+
           <!-- 添加搜索框 -->
           <div class="rss-search-box">
             <el-input
-              v-model="rssSearchQuery"
-              placeholder="搜索仓库名称..."
-              prefix-icon="el-icon-search"
-              clearable
+                v-model="rssSearchQuery"
+                placeholder="搜索仓库名称..."
+                prefix-icon="el-icon-search"
+                clearable
             ></el-input>
           </div>
-          
-          <el-table 
-            :data="filteredRssLinks" 
-            style="width: 100%" 
-            height="350px" 
-            border
+
+          <el-table
+              :data="filteredRssLinks"
+              style="width: 100%"
+              height="350px"
+              border
           >
             <el-table-column prop="repo_name" label="仓库名称" width="180"></el-table-column>
             <el-table-column prop="rss_link" label="RSS 链接" show-overflow-tooltip>
               <template slot-scope="scope">
                 <div class="table-rss-link">
                   <span>{{ scope.row.rss_link }}</span>
-                  <el-button 
-                    size="mini" 
-                    type="text" 
-                    @click="copyToClipboard(scope.row.rss_link)"
-                    icon="el-icon-document-copy"
-                  >复制</el-button>
+                  <el-button
+                      size="mini"
+                      type="text"
+                      @click="copyToClipboard(scope.row.rss_link)"
+                      icon="el-icon-document-copy"
+                  >复制
+                  </el-button>
                 </div>
               </template>
             </el-table-column>
@@ -540,14 +549,15 @@
 
     <!-- 添加大图预览模态框 -->
     <el-dialog
-      :visible.sync="showLargeImage"
-      :title="currentRepoName + ' Star历史'"
-      width="80%"
-      class="trend-dialog"
-      @closed="currentLargeImage = ''"
+        :visible.sync="showLargeImage"
+        :title="currentRepoName + ' Star历史'"
+        width="80%"
+        class="trend-dialog"
+        @closed="currentLargeImage = ''"
     >
       <div class="large-image-container">
-        <img v-if="currentLargeImage" :src="currentLargeImage" class="large-trend-image" :alt="currentRepoName + ' Star历史'">
+        <img v-if="currentLargeImage" :src="currentLargeImage" class="large-trend-image"
+             :alt="currentRepoName + ' Star历史'">
       </div>
     </el-dialog>
   </div>
@@ -555,12 +565,12 @@
 
 <script>
 import axios from 'axios'
-import { format, isToday, isWeekend, isSameMonth, parseISO } from 'date-fns'
-import { marked } from 'marked'
+import {format, isToday, isWeekend, isSameMonth, parseISO} from 'date-fns'
+import {marked} from 'marked'
 import DOMPurify from 'dompurify'  // 用于防止 XSS 攻击
 import GitHubLogin from '@/auth/GitHubLogin.vue'  // 修改导入路径
-import { zhCN } from 'date-fns/locale'
-import { API_ENDPOINTS } from '@/api/config'  // 导入 API 配置
+import {zhCN} from 'date-fns/locale'
+import {API_ENDPOINTS} from '@/api/config'  // 导入 API 配置
 import GitHubLogo from '@/components/GitHubLogo.vue'  // 导入 GitHubLogo 组件
 
 export default {
@@ -632,7 +642,7 @@ export default {
       if (this.searchQuery) {
         const query = this.searchQuery.toLowerCase()
         result = result.filter(repo =>
-          repo.repo_name.toLowerCase().includes(query)
+            repo.repo_name.toLowerCase().includes(query)
         )
       }
 
@@ -647,10 +657,10 @@ export default {
       if (!this.loading) return {}
 
       return {
-        background: `linear-gradient(to right, 
-          var(--el-color-primary) 0%, 
-          var(--el-color-primary) ${this.loadingProgress}%, 
-          rgba(144, 147, 153, 0.3) ${this.loadingProgress}%, 
+        background: `linear-gradient(to right,
+          var(--el-color-primary) 0%,
+          var(--el-color-primary) ${this.loadingProgress}%,
+          rgba(144, 147, 153, 0.3) ${this.loadingProgress}%,
           rgba(144, 147, 153, 0.3) 100%)`
       }
     },
@@ -658,10 +668,10 @@ export default {
       if (!this.rssSearchQuery) {
         return this.batchRssLinks;
       }
-      
+
       const query = this.rssSearchQuery.toLowerCase();
-      return this.batchRssLinks.filter(item => 
-        item.repo_name.toLowerCase().includes(query)
+      return this.batchRssLinks.filter(item =>
+          item.repo_name.toLowerCase().includes(query)
       );
     }
   },
@@ -898,9 +908,9 @@ export default {
       }
       // 检查是否所有资源都是源代码文件
       return release.assets.every(asset =>
-        asset.name.endsWith('.zip') ||
-        asset.name.endsWith('.tar.gz') ||
-        asset.name.endsWith('.tar.xz')
+          asset.name.endsWith('.zip') ||
+          asset.name.endsWith('.tar.gz') ||
+          asset.name.endsWith('.tar.xz')
       )
     },
 
@@ -993,7 +1003,7 @@ export default {
         this.$nextTick(() => {
           const element = document.querySelector(`[data-repo-name="${repoName}"]`)
           if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            element.scrollIntoView({behavior: 'smooth', block: 'center'})
             // 添加高亮效果
             element.classList.add('highlight')
             setTimeout(() => {
@@ -1021,7 +1031,7 @@ export default {
     formatCalendarHeader(date) {
       // 确保参数是Date对象
       const dateObj = date instanceof Date ? date : new Date(date);
-      return format(dateObj, 'yyyy年 MM月', { locale: zhCN });
+      return format(dateObj, 'yyyy年 MM月', {locale: zhCN});
     },
 
     isToday(dateString) {
@@ -1066,14 +1076,14 @@ export default {
       if (!this.accessToken) return;
       try {
         await axios.post(API_ENDPOINTS.RECORD_CLICK,
-          {
-            repo_name: repoName,
-            release_tag: releaseTag,
-            release_published_at: releasePublishedAt
-          },
-          {
-            headers: { Authorization: `Bearer ${this.accessToken}` }
-          }
+            {
+              repo_name: repoName,
+              release_tag: releaseTag,
+              release_published_at: releasePublishedAt
+            },
+            {
+              headers: {Authorization: `Bearer ${this.accessToken}`}
+            }
         );
       } catch (error) {
         console.error('Failed to record click:', error);
@@ -1089,8 +1099,8 @@ export default {
       this.logsCurrentPage = page;
       try {
         const response = await axios.get(API_ENDPOINTS.CLICK_LOGS, {
-          headers: { Authorization: `Bearer ${this.accessToken}` },
-          params: { page: this.logsCurrentPage, limit: this.logsPageSize }
+          headers: {Authorization: `Bearer ${this.accessToken}`},
+          params: {page: this.logsCurrentPage, limit: this.logsPageSize}
         });
         console.log('[fetchClickLogs] Raw API Response:', response);
         if (response.data.status === 'success') {
@@ -1127,7 +1137,7 @@ export default {
       if (!isoString) return '-';
       try {
         const date = parseISO(isoString);
-        return format(date, 'yyyy-MM-dd HH:mm:ss', { locale: zhCN });
+        return format(date, 'yyyy-MM-dd HH:mm:ss', {locale: zhCN});
       } catch (e) {
         return isoString;
       }
@@ -1178,7 +1188,7 @@ export default {
               });
 
               // 平滑滚动到目标元素
-              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.scrollIntoView({behavior: 'smooth', block: 'center'});
 
               // 添加高亮效果
               element.classList.add('highlight');
@@ -1244,7 +1254,7 @@ export default {
 
       // 获取对应的日志数据
       const log = this.clickLogs[index]
-      
+
       // 如果当前是列表视图，跳转到列表中最接近的项目
       if (this.viewMode === 'list') {
         this.jumpToNearestTimeInList(log.click_time)
@@ -1259,7 +1269,7 @@ export default {
       if (!isoString) return '-';
       try {
         const date = parseISO(isoString);
-        return format(date, 'yyyy-MM-dd HH:mm', { locale: zhCN }); // 省略秒
+        return format(date, 'yyyy-MM-dd HH:mm', {locale: zhCN}); // 省略秒
       } catch (e) {
         return isoString;
       }
@@ -1284,7 +1294,7 @@ export default {
       this.currentRepoName = repoName;
       this.rssLoading = true;
       this.rssDialogVisible = true;
-      
+
       try {
         const response = await axios.get(`${API_ENDPOINTS.REPO_RSS_LINK}/${repoName}`);
         if (response.data.status === 'success') {
@@ -1299,21 +1309,21 @@ export default {
         this.rssLoading = false;
       }
     },
-    
+
     // 批量获取RSS链接
     async handleBatchRss() {
       this.rssMode = 'batch';
       this.rssLoading = true;
       this.rssDialogVisible = true;
       this.batchRssLinks = [];
-      
+
       try {
         const response = await axios.get(API_ENDPOINTS.ALL_STARRED_RSS, {
           headers: {
             Authorization: `Bearer ${this.accessToken}`
           }
         });
-        
+
         if (response.data.status === 'success') {
           this.batchRssLinks = response.data.data;
         } else {
@@ -1326,14 +1336,14 @@ export default {
         this.rssLoading = false;
       }
     },
-    
+
     // 复制文本到剪贴板
     copyToClipboard(text) {
       const textArea = document.createElement('textarea');
       textArea.value = text;
       document.body.appendChild(textArea);
       textArea.select();
-      
+
       try {
         const successful = document.execCommand('copy');
         if (successful) {
@@ -1344,16 +1354,16 @@ export default {
       } catch (err) {
         this.$message.error('复制失败');
       }
-      
+
       document.body.removeChild(textArea);
     },
-    
+
     // 复制所有RSS链接
     copyAllRssLinks() {
       const linkTexts = this.batchRssLinks.map(item => item.rss_link).join('\n');
       this.copyToClipboard(linkTexts);
     },
-    
+
     // 下载OPML文件
     downloadOpml() {
       // 创建OPML格式文件
@@ -1364,59 +1374,59 @@ export default {
   </head>
   <body>
     <outline text="GitHub Starred Releases" title="GitHub Starred Releases">`;
-      
+
       this.batchRssLinks.forEach(item => {
         opmlContent += `
       <outline type="rss" text="${item.repo_name}" title="${item.repo_name}" xmlUrl="${item.rss_link}" htmlUrl="https://github.com/${item.repo_name}/releases"/>`;
       });
-      
+
       opmlContent += `
     </outline>
   </body>
 </opml>`;
-      
+
       // 创建下载
-      const blob = new Blob([opmlContent], { type: 'text/xml' });
+      const blob = new Blob([opmlContent], {type: 'text/xml'});
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = 'github_starred_releases.opml';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       this.$message.success('OPML文件已下载');
     },
 
     // 添加跳转到日历特定日期的方法
     jumpToDateInCalendar(timeStr) {
       if (!timeStr) return;
-      
+
       try {
         // 解析时间
         const targetDate = new Date(timeStr);
-        
+
         // 设置日历显示的月份
         this.calendarDate = new Date(
-          targetDate.getFullYear(),
-          targetDate.getMonth(),
-          1
+            targetDate.getFullYear(),
+            targetDate.getMonth(),
+            1
         );
-        
+
         // 标记需要高亮的日期
         this.highlightCalendarDate = format(targetDate, 'yyyy-MM-dd');
-        
+
         // 显示提示消息
         this.$message({
           message: `已跳转到日历中的 ${format(targetDate, 'yyyy-MM-dd')} 日期`,
           type: 'success',
           duration: 3000
         });
-        
+
         // 3秒后取消高亮
         setTimeout(() => {
           this.highlightCalendarDate = null;
         }, 3000);
-        
+
       } catch (error) {
         console.error('跳转到日历日期失败:', error);
         this.$message.error('日期跳转失败，请重试');
@@ -1427,45 +1437,45 @@ export default {
     setHoverRepo(repoName) {
       this.hoverRepoName = repoName;
     },
-    
+
     // 判断是否是当前悬浮的仓库
     isHoverRepo(repoName) {
       return this.hoverRepoName === repoName;
     },
-    
+
     // 添加跳转到最后活动时间的方法
     jumpToLastActivity() {
       if (!this.lastActivityTime) {
         this.$message.warning('没有找到最后浏览记录');
         return;
       }
-      
+
       if (this.viewMode === 'list') {
         this.jumpToNearestTimeInList(this.lastActivityTime);
       } else if (this.viewMode === 'calendar') {
         this.jumpToDateInCalendar(this.lastActivityTime);
       }
-      
+
       this.$message.success('已跳转到最后浏览时间');
     },
 
     // 在 methods 中添加获取收藏数的方法
     async fetchRepoStars() {
       if (!this.accessToken || !this.releases.length) return;
-      
+
       try {
         // 获取一批仓库的stars信息
         const batchSize = 10; // 每次处理10个仓库
         for (let i = 0; i < this.releases.length; i += batchSize) {
           const batch = this.releases.slice(i, i + batchSize);
           const repoNames = batch.map(repo => repo.repo_name).join(',');
-          
+
           const response = await axios.get(`${API_ENDPOINTS.REPO_STARS}?repos=${repoNames}`, {
             headers: {
               Authorization: `Bearer ${this.accessToken}`
             }
           });
-          
+
           if (response.data.status === 'success') {
             // 更新仓库star数
             response.data.data.forEach(repoData => {
@@ -1491,14 +1501,14 @@ export default {
     // 添加收藏数格式化方法
     formatStarCount(count) {
       if (!count && count !== 0) return '加载中';
-      
+
       // 处理大数字的显示
       if (count >= 1000000) {
         return (count / 1000000).toFixed(1) + 'M';
       } else if (count >= 1000) {
         return (count / 1000).toFixed(1) + 'K';
       }
-      
+
       return count.toString();
     },
   },
@@ -1522,7 +1532,7 @@ export default {
         this.$nextTick(() => {
           this.addTimelineClickHandlers()
         })
-        
+
         // 获取仓库收藏数
         this.fetchRepoStars()
       }
@@ -1905,8 +1915,12 @@ export default {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .button-progress {
@@ -1914,7 +1928,7 @@ export default {
   left: 0;
   top: 0;
   height: 100%;
-  background-color:#409eff; /* 主色调进度条 */
+  background-color: #409eff; /* 主色调进度条 */
   transition: width 0.3s ease;
   z-index: 1;
   border-radius: 20px 0 0 20px; /* 保持左侧圆角 */
@@ -1939,7 +1953,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(to right, rgba(255,255,255,0.1), rgba(255,255,255,0.2));
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.2));
   border-radius: inherit;
 }
 
@@ -2998,8 +3012,12 @@ h2 {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* 修改repo-header样式，使其支持收藏数和趋势图显示 */

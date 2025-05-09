@@ -11,5 +11,6 @@ export const API_ENDPOINTS = {
   CLICK_LOGS: `${API_BASE_URL}/api/click-logs`,
   REPO_RSS_LINK: `${API_BASE_URL}/api/repo-rss-link`,
   BATCH_RSS_LINKS: `${API_BASE_URL}/api/batch-rss-links`,
-  ALL_STARRED_RSS: `${API_BASE_URL}/api/all-starred-rss`
+  ALL_STARRED_RSS: `${API_BASE_URL}/api/all-starred-rss`,
+  REPO_STARS: `${API_BASE_URL}/api/repo-stars`
 };

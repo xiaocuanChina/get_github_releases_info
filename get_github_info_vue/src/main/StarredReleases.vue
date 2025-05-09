@@ -335,14 +335,63 @@
                         </div>
                       </el-tooltip>
                     </h3>
-                    <p v-if="repo.description" class="repo-description">
-                      {{ repo.description }}
-                    </p>
+                    <div class="repo-meta">
+                      <p v-if="repo.description" class="repo-description">
+                        {{ repo.description }}
+                      </p>
+                      <div class="release-time">
+                        <i class="el-icon-time"></i>
+                        <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
+                      </div>
+                    </div>
                   </div>
-                  <!-- 将发布时间移到这里，与标题相对居中 -->
-                  <div class="release-date-container">
-                    <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
-                  </div>
+                </div>
+                
+                <!-- 添加收藏数和趋势图 -->
+                <div class="repo-stats">
+
+                <!-- 趋势图 -->
+                  <el-popover
+                    placement="bottom"
+                    trigger="hover"
+                    width="330"
+                    popper-class="trends-popover"
+                  >
+                    <template #reference>
+                      <div class="trends-icon">
+                        <img src="/trend.png" class="trend-icon" alt="趋势" />
+                      </div>
+                    </template>
+                    <div class="trend-container">
+                      <div class="trend-header">
+                        <a :href="`https://github.com/${repo.repo_name}`" target="_blank" class="repo-title-link">
+                          {{ repo.repo_name }} Star历史
+                        </a>
+                      </div>
+                      <div class="trend-content">
+                        <!-- 使用star-history的SVG趋势图，点击查看大图 -->
+                        <div class="trend-history-container" @click="showLargeImageDialog(repo.repo_name, `https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`)">
+                          <img 
+                            :src="`https://api.star-history.com/svg?repos=${repo.repo_name}&type=Date`" 
+                            class="trend-history"
+                            :alt="`${repo.repo_name} Star历史`"
+                          />
+                          <div class="view-large-overlay">
+                            <span>点击查看大图</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </el-popover>
+                  <!-- 收藏数 -->
+                  <el-tooltip content="收藏数" placement="top">
+                    <div class="stars-count">
+                      <img src="/collect.png" class="star-icon" alt="收藏" />
+                      <span class="star-count-value">{{ formatStarCount(repo.stargazers_count) }}</span>
+                    </div>
+                  </el-tooltip>
+                  
+                  
                 </div>
               </div>
 
@@ -488,6 +537,19 @@
         </div>
       </div>
     </el-dialog>
+
+    <!-- 添加大图预览模态框 -->
+    <el-dialog
+      :visible.sync="showLargeImage"
+      :title="currentRepoName + ' Star历史'"
+      width="80%"
+      class="trend-dialog"
+      @closed="currentLargeImage = ''"
+    >
+      <div class="large-image-container">
+        <img v-if="currentLargeImage" :src="currentLargeImage" class="large-trend-image" :alt="currentRepoName + ' Star历史'">
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -549,6 +611,8 @@ export default {
       rssSearchQuery: '', // 添加RSS搜索查询
       highlightCalendarDate: null, // 需要在日历中高亮显示的日期
       hoverRepoName: null, // 添加鼠标悬浮的仓库名
+      showLargeImage: false,
+      currentLargeImage: '',
     }
   },
 
@@ -1384,6 +1448,59 @@ export default {
       
       this.$message.success('已跳转到最后浏览时间');
     },
+
+    // 在 methods 中添加获取收藏数的方法
+    async fetchRepoStars() {
+      if (!this.accessToken || !this.releases.length) return;
+      
+      try {
+        // 获取一批仓库的stars信息
+        const batchSize = 10; // 每次处理10个仓库
+        for (let i = 0; i < this.releases.length; i += batchSize) {
+          const batch = this.releases.slice(i, i + batchSize);
+          const repoNames = batch.map(repo => repo.repo_name).join(',');
+          
+          const response = await axios.get(`${API_ENDPOINTS.REPO_STARS}?repos=${repoNames}`, {
+            headers: {
+              Authorization: `Bearer ${this.accessToken}`
+            }
+          });
+          
+          if (response.data.status === 'success') {
+            // 更新仓库star数
+            response.data.data.forEach(repoData => {
+              const repoIndex = this.releases.findIndex(repo => repo.repo_name === repoData.repo_name);
+              if (repoIndex !== -1) {
+                this.$set(this.releases[repoIndex], 'stargazers_count', repoData.stars);
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error('获取仓库收藏数失败:', error);
+      }
+    },
+
+    // 在methods中添加查看大图的方法
+    showLargeImageDialog(repoName, imageUrl) {
+      this.currentRepoName = repoName;
+      this.currentLargeImage = imageUrl;
+      this.showLargeImage = true;
+    },
+
+    // 添加收藏数格式化方法
+    formatStarCount(count) {
+      if (!count && count !== 0) return '加载中';
+      
+      // 处理大数字的显示
+      if (count >= 1000000) {
+        return (count / 1000000).toFixed(1) + 'M';
+      } else if (count >= 1000) {
+        return (count / 1000).toFixed(1) + 'K';
+      }
+      
+      return count.toString();
+    },
   },
 
   async mounted() {
@@ -1405,6 +1522,9 @@ export default {
         this.$nextTick(() => {
           this.addTimelineClickHandlers()
         })
+        
+        // 获取仓库收藏数
+        this.fetchRepoStars()
       }
     }
   },
@@ -2506,8 +2626,8 @@ h2 {
 /* 最后活动指示器 */
 .last-activity-indicator {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  bottom: 5px;
+  left: 5px;
   color: #409eff;
   font-size: 14px;
   z-index: 2;
@@ -2880,6 +3000,225 @@ h2 {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* 修改repo-header样式，使其支持收藏数和趋势图显示 */
+.repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.repo-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: 10px;
+}
+
+.stars-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  background-color: rgba(230, 162, 60, 0.1);
+  border-radius: 15px;
+  color: #e6a23c;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.3s;
+  cursor: default;
+  border: 1px solid rgba(230, 162, 60, 0.2);
+}
+
+.stars-count:hover {
+  background-color: rgba(230, 162, 60, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(230, 162, 60, 0.2);
+}
+
+.star-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.star-count-value {
+  font-weight: 600;
+}
+
+.trends-icon {
+  color: #409eff;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.trend-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.trends-icon:hover {
+  transform: scale(1.2);
+}
+
+/* 趋势图弹出层样式 */
+:deep(.trends-popover) {
+  padding: 0;
+}
+
+.trend-container {
+  width: 100%;
+}
+
+.trend-header {
+  padding: 10px;
+  border-bottom: 1px solid #ebeef5;
+  font-weight: bold;
+  color: #303133;
+  text-align: center;
+}
+
+.trend-content {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.trend-history {
+  width: 100%;
+  max-width: 300px;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+}
+
+.trend-history:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.view-on-github {
+  padding: 8px 16px;
+  background-color: #24292e;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.view-on-github:hover {
+  background-color: #1a1e22;
+  transform: translateY(-2px);
+}
+
+.repo-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.release-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #909399;
+  font-size: 13px;
+}
+
+.release-date {
+  margin: 0;
+}
+
+/* 修改趋势图样式，支持查看大图 */
+.trend-history-container {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.trend-history {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  transition: all 0.3s;
+  display: block;
+}
+
+.view-large-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.3s;
+  color: white;
+  font-size: 14px;
+}
+
+.trend-history-container:hover .view-large-overlay {
+  opacity: 1;
+}
+
+.trend-history-container:hover .trend-history {
+  transform: scale(1.05);
+}
+
+/* 仓库标题链接样式 */
+.repo-title-link {
+  color: #303133;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.repo-title-link:hover {
+  color: #409EFF;
+}
+
+/* 删除不再使用的样式 */
+.view-on-github {
+  display: none;
+}
+
+/* 大图预览相关样式 */
+.large-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  overflow: auto;
+}
+
+.large-trend-image {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+:deep(.trend-dialog .el-dialog__body) {
+  padding: 10px;
+  text-align: center;
+}
+
+:deep(.trend-dialog .el-dialog__header) {
+  padding: 15px 20px;
+  border-bottom: 1px solid #ebeef5;
 }
 </style>
 

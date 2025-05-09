@@ -796,6 +796,74 @@ async def get_all_starred_rss(request: Request):
         print(f"获取RSS链接时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/repo-stars")
+async def get_repo_stars(request: Request, repos: str = Query(None)):
+    """获取仓库的星标数，支持批量获取
+    
+    参数:
+    - repos: 逗号分隔的仓库名列表，如 "owner1/repo1,owner2/repo2"
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+    
+    if not repos:
+        raise HTTPException(status_code=400, detail="Repository names are required")
+    
+    repo_list = repos.split(',')
+    result = []
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 用于并发获取仓库信息的任务
+            async def fetch_repo_stars(repo_name):
+                url = f"https://api.github.com/repos/{repo_name}"
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "GitHub-Starred-Releases-App"
+                }
+                
+                try:
+                    async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
+                        if response.status == 200:
+                            repo_data = await response.json()
+                            return {
+                                "repo_name": repo_name,
+                                "stars": repo_data.get("stargazers_count", 0),
+                                "forks": repo_data.get("forks_count", 0),
+                                "watchers": repo_data.get("watchers_count", 0)
+                            }
+                        else:
+                            print(f"获取仓库信息失败: {repo_name}, 状态码: {response.status}")
+                            return {
+                                "repo_name": repo_name,
+                                "stars": 0,
+                                "error": f"API返回状态码 {response.status}"
+                            }
+                except Exception as e:
+                    print(f"获取仓库 {repo_name} 信息时出错: {str(e)}")
+                    return {
+                        "repo_name": repo_name,
+                        "stars": 0,
+                        "error": str(e)
+                    }
+            
+            # 并发获取所有仓库的星标数
+            tasks = [fetch_repo_stars(repo) for repo in repo_list]
+            results = await asyncio.gather(*tasks)
+            
+            # 过滤掉可能的None值
+            result = [r for r in results if r]
+            
+            return {"status": "success", "data": result}
+            
+    except Exception as e:
+        print(f"获取仓库星标数时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
 

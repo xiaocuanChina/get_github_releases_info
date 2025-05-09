@@ -2211,10 +2211,13 @@ h2 {
   margin: 0; /* 移除描述的外边距 */
   color: #606266;
   font-size: 14px;
-  overflow: hidden; /* 隐藏溢出部分 */
-  text-overflow: ellipsis; /* 显示省略号 */
-  white-space: nowrap; /* 防止文本换行 */
-  line-height: 1.4; /* 与标题保持一致的行高 */
+  line-height: 1.5; /* 调整行高 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 显示2行 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 42px; /* 大约两行的高度 */
 }
 
 /* 发布日期容器样式 */
@@ -2364,11 +2367,8 @@ h2 {
   }
 
   .repo-description {
-    white-space: normal; /* 小屏幕上允许文本换行 */
-    -webkit-line-clamp: 2; /* 最多显示两行 */
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    white-space: normal;
+    -webkit-line-clamp: 3; /* 在小屏幕上允许显示更多行 */
+    max-height: 63px; /* 约3行的高度 */
   }
 }
 

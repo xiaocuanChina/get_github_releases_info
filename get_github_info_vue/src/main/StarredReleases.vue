@@ -121,16 +121,27 @@
             <template #header>
               <div class="footprints-header">
                 <span>我的足迹</span>
-                <el-tooltip content="刷新足迹" placement="top">
-                  <div
-                    class="icon-button refresh-icon"
-                    :class="{ 'is-loading': logsLoading }"
-                    @click="fetchClickLogs(1)"
-                  >
-                    <AppIcon name="refresh" />
-                    <span v-if="logsLoading" class="loading-indicator"></span>
-                  </div>
-                </el-tooltip>
+                <div class="footprints-actions">
+                  <!-- 添加跳转到最后浏览时间的按钮 -->
+                  <el-tooltip content="跳转到最后浏览" placement="top">
+                    <div
+                      class="icon-button last-activity-btn"
+                      @click="jumpToLastActivity"
+                    >
+                      <AppIcon name="position" />
+                    </div>
+                  </el-tooltip>
+                  <el-tooltip content="刷新足迹" placement="top">
+                    <div
+                      class="icon-button refresh-icon"
+                      :class="{ 'is-loading': logsLoading }"
+                      @click="fetchClickLogs(1)"
+                    >
+                      <AppIcon name="refresh" />
+                      <span v-if="logsLoading" class="loading-indicator"></span>
+                    </div>
+                  </el-tooltip>
+                </div>
               </div>
             </template>
 
@@ -1356,6 +1367,22 @@ export default {
     // 判断是否是当前悬浮的仓库
     isHoverRepo(repoName) {
       return this.hoverRepoName === repoName;
+    },
+    
+    // 添加跳转到最后活动时间的方法
+    jumpToLastActivity() {
+      if (!this.lastActivityTime) {
+        this.$message.warning('没有找到最后浏览记录');
+        return;
+      }
+      
+      if (this.viewMode === 'list') {
+        this.jumpToNearestTimeInList(this.lastActivityTime);
+      } else if (this.viewMode === 'calendar') {
+        this.jumpToDateInCalendar(this.lastActivityTime);
+      }
+      
+      this.$message.success('已跳转到最后浏览时间');
     },
   },
 
@@ -2801,6 +2828,58 @@ h2 {
 /* 清除之前错误的全局设置 */
 :deep(.el-button--default) {
   color: #606266 !important; /* 默认按钮文字颜色 */
+}
+
+/* 足迹头部样式 */
+.footprints-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 添加足迹操作按钮组样式 */
+.footprints-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 最后活动按钮样式 */
+.last-activity-btn {
+  color: #409EFF;
+  position: relative;
+}
+
+.last-activity-btn:hover {
+  color: #66b1ff;
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+/* 为刷新图标添加加载效果 */
+.refresh-icon {
+  position: relative;
+}
+
+.refresh-icon.is-loading {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.loading-indicator {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  top: 0;
+  left: 0;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 </style>
 

@@ -93,21 +93,42 @@
           </div>
 
           <div class="control-group">
-            <div class="control-label">筛选：</div>
+            <div class="control-label">内容筛选：</div>
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
-                <div class="icon-button" :class="{ active: filterType === 'all' }" @click="filterType = 'all'">
+                <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
                   <AppIcon name="document"/>
                 </div>
               </el-tooltip>
               <el-tooltip content="仅源代码（无下载内容）" placement="top">
-                <div class="icon-button" :class="{ active: filterType === 'source' }" @click="filterType = 'source'">
+                <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'">
                   <AppIcon name="document-delete"/>
                 </div>
               </el-tooltip>
               <el-tooltip content="包含二进制" placement="top">
-                <div class="icon-button" :class="{ active: filterType === 'binary' }" @click="filterType = 'binary'">
+                <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'">
                   <AppIcon name="download"/>
+                </div>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <div class="control-label">版本类型：</div>
+            <div class="filter-controls">
+              <el-tooltip content="显示全部" placement="top">
+                <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
+                  <AppIcon name="files"/>
+                </div>
+              </el-tooltip>
+              <el-tooltip content="仅正式版" placement="top">
+                <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'">
+                  <AppIcon name="success"/>
+                </div>
+              </el-tooltip>
+              <el-tooltip content="仅预发布" placement="top">
+                <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'">
+                  <AppIcon name="warning"/>
                 </div>
               </el-tooltip>
             </div>
@@ -376,12 +397,18 @@
                     >
                       正式版
                     </el-tag>
+                    <el-tag
+                        v-if="isSourceCodeOnly(repo.latest_release)"
+                        size="small"
+                        type="info"
+                        class="release-type-tag"
+                    >
+                      仅包含源代码
+                    </el-tag>
                   </div>
                   <!-- 移除这里的发布时间 -->
                 </h4>
-                <div v-if="isSourceCodeOnly(repo.latest_release)" class="source-code-notice">
-                  <el-tag size="small" type="info">仅包含源代码</el-tag>
-                </div>
+                <!-- 添加回markdown-wrapper容器 -->
                 <div class="markdown-wrapper" v-if="repo.latest_release.body">
                   <div
                       class="markdown-body"
@@ -495,7 +522,8 @@ export default {
       searchQuery: '',
       currentPage: 1,
       pageSize: 10,
-      filterType: 'all',  // 添加筛选类型
+      contentFilter: 'all',  // 内容筛选类型
+      releaseTypeFilter: 'all', // 版本类型筛选
       isAuthenticated: false,
       accessToken: null,
       userInfo: null, // 添加用户信息
@@ -540,23 +568,31 @@ export default {
     filteredRepos() {
       let result = this.releases;
 
-      // 先按筛选类型过滤
-      if (this.filterType !== 'all') {
+      // 按内容类型筛选
+      if (this.contentFilter !== 'all') {
         result = result.filter(repo => {
-          const isSourceOnly = this.isSourceCodeOnly(repo.latest_release)
-          return this.filterType === 'source' ? isSourceOnly : !isSourceOnly
-        })
+          const isSourceOnly = this.isSourceCodeOnly(repo.latest_release);
+          return this.contentFilter === 'source' ? isSourceOnly : !isSourceOnly;
+        });
       }
 
-      // 再按搜索关键词过滤
+      // 按版本类型筛选
+      if (this.releaseTypeFilter !== 'all') {
+        result = result.filter(repo => {
+          const isPreRelease = this.isPreRelease(repo.latest_release);
+          return this.releaseTypeFilter === 'prerelease' ? isPreRelease : !isPreRelease;
+        });
+      }
+
+      // 再按搜索关键词筛选
       if (this.searchQuery) {
-        const query = this.searchQuery.toLowerCase()
+        const query = this.searchQuery.toLowerCase();
         result = result.filter(repo =>
             repo.repo_name.toLowerCase().includes(query)
-        )
+        );
       }
 
-      return result
+      return result;
     },
     paginatedRepos() {
       const start = (this.currentPage - 1) * this.pageSize
@@ -1483,7 +1519,10 @@ export default {
     searchQuery() {
       this.currentPage = 1
     },
-    filterType() {  // 添加对筛选类型的监听
+    contentFilter() {  // 添加对筛选类型的监听
+      this.currentPage = 1
+    },
+    releaseTypeFilter() {  // 添加对筛选类型的监听
       this.currentPage = 1
     }
   }

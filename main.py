@@ -64,6 +64,19 @@ def init_db():
             release_published_at TEXT NULL
         )
     ''')
+    
+    # 创建RSS链接表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS repo_rss_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_login TEXT NOT NULL,
+            repo_name TEXT NOT NULL,
+            rss_link TEXT NOT NULL,
+            last_updated TEXT NOT NULL,
+            UNIQUE(user_login, repo_name)
+        )
+    ''')
+    
     conn.commit()
     conn.close()
     print("数据库已初始化")
@@ -745,19 +758,13 @@ async def get_batch_rss_links(repo_names: List[str]):
         print(f"批量获取RSS链接时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# 新增一个接口用于获取当前用户所有已star仓库的RSS链接
-@app.get("/api/all-starred-rss")
-async def get_all_starred_rss(request: Request):
-    """获取用户所有已star仓库的RSS链接"""
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid token")
-
-    access_token = auth_header.split(" ")[1]
-
+# 更新单个用户的RSS链接
+async def update_rss_links_for_user(user_login, access_token):
+    """更新指定用户的所有starred仓库的RSS链接到数据库"""
+    conn = None
     try:
+        # 获取用户的所有starred仓库
         async with aiohttp.ClientSession() as session:
-            # 获取所有starred仓库
             starred_repos = []
             page = 1
             while True:
@@ -768,7 +775,7 @@ async def get_all_starred_rss(request: Request):
                             "Authorization": f"Bearer {access_token}",
                             "Accept": "application/vnd.github.v3+json"
                         },
-                        proxy=PROXY_URL  # 使用代理
+                        proxy=PROXY_URL
                 ) as response:
                     if response.status != 200:
                         break
@@ -777,23 +784,111 @@ async def get_all_starred_rss(request: Request):
                         break
                     starred_repos.extend([repo["full_name"] for repo in page_data])
                     page += 1
-
-            # 生成RSS链接
-            rss_links = []
+            
+            # 更新数据库
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            now = datetime.now(timezone.utc).isoformat()
+            
+            # 首先清除用户之前的记录
+            cursor.execute("DELETE FROM repo_rss_links WHERE user_login = ?", (user_login,))
+            
+            # 批量插入新记录
             for repo_name in starred_repos:
                 rss_link = f"https://github.com/{repo_name}/releases.atom"
-                rss_links.append({
-                    "repo_name": repo_name,
-                    "rss_link": rss_link
-                })
+                cursor.execute(
+                    "INSERT INTO repo_rss_links (user_login, repo_name, rss_link, last_updated) VALUES (?, ?, ?, ?)",
+                    (user_login, repo_name, rss_link, now)
+                )
+            
+            conn.commit()
+            return len(starred_repos)
+    except Exception as e:
+        print(f"更新RSS链接时发生错误: {str(e)}")
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
-            return {"status": "success", "total": len(rss_links), "data": rss_links}
+# 修改现有API，从数据库获取RSS链接
+@app.get("/api/all-starred-rss")
+async def get_all_starred_rss(request: Request, force_refresh: bool = False):
+    """获取用户所有已star仓库的RSS链接"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-    except aiohttp.ClientError as e:
-        print(f"网络请求错误: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+    access_token = auth_header.split(" ")[1]
+    
+    # 获取用户登录名
+    user_login = await get_user_login_from_token(access_token)
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Invalid token or failed to fetch user info")
+    
+    try:
+        conn = sqlite3.connect(DATABASE_FILE)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # 检查是否需要刷新数据
+        need_refresh = force_refresh
+        if not need_refresh:
+            # 检查是否存在数据
+            cursor.execute("SELECT COUNT(*) as count FROM repo_rss_links WHERE user_login = ?", (user_login,))
+            result = cursor.fetchone()
+            need_refresh = result['count'] == 0
+        
+        # 如果需要刷新，则更新数据库
+        if need_refresh:
+            await update_rss_links_for_user(user_login, access_token)
+        
+        # 从数据库获取RSS链接
+        cursor.execute(
+            "SELECT repo_name, rss_link FROM repo_rss_links WHERE user_login = ? ORDER BY repo_name",
+            (user_login,)
+        )
+        rss_links = [dict(row) for row in cursor.fetchall()]
+        
+        return {
+            "status": "success", 
+            "total": len(rss_links), 
+            "data": rss_links,
+            "from_cache": not need_refresh
+        }
+    
     except Exception as e:
         print(f"获取RSS链接时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+# 添加一个新接口用于强制刷新RSS链接
+@app.post("/api/refresh-rss-links")
+async def refresh_rss_links(request: Request):
+    """强制刷新用户的RSS链接"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+    
+    # 获取用户登录名
+    user_login = await get_user_login_from_token(access_token)
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Invalid token or failed to fetch user info")
+    
+    try:
+        # 更新数据库
+        count = await update_rss_links_for_user(user_login, access_token)
+        return {
+            "status": "success",
+            "message": f"成功刷新 {count} 个RSS链接"
+        }
+    except Exception as e:
+        print(f"刷新RSS链接时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/repo-stars")
@@ -862,6 +957,100 @@ async def get_repo_stars(request: Request, repos: str = Query(None)):
             
     except Exception as e:
         print(f"获取仓库星标数时发生错误: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# 添加一个新接口用于检查是否需要刷新RSS链接
+@app.get("/api/check-rss-updates")
+async def check_rss_updates(request: Request):
+    """检查是否有新的RSS链接需要更新"""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    access_token = auth_header.split(" ")[1]
+    
+    # 获取用户登录名
+    user_login = await get_user_login_from_token(access_token)
+    if not user_login:
+        raise HTTPException(status_code=401, detail="Invalid token or failed to fetch user info")
+    
+    try:
+        # 获取用户的所有starred仓库
+        async with aiohttp.ClientSession() as session:
+            # 从GitHub获取当前starred仓库列表
+            starred_repos = []
+            page = 1
+            while True:
+                starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
+                async with session.get(
+                        starred_url,
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "Accept": "application/vnd.github.v3+json"
+                        },
+                        proxy=PROXY_URL
+                ) as response:
+                    if response.status != 200:
+                        break
+                    page_data = await response.json()
+                    if not page_data:
+                        break
+                    starred_repos.extend([repo["full_name"] for repo in page_data])
+                    page += 1
+            
+            # 查询数据库中已有的仓库
+            conn = sqlite3.connect(DATABASE_FILE)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # 获取数据库中的仓库列表
+            cursor.execute("SELECT repo_name FROM repo_rss_links WHERE user_login = ?", (user_login,))
+            db_repos = [row['repo_name'] for row in cursor.fetchall()]
+            
+            # 检查数据库中是否存在记录
+            has_records = len(db_repos) > 0
+            
+            # 计算需要添加的新仓库和需要删除的旧仓库
+            new_repos = [repo for repo in starred_repos if repo not in db_repos]
+            removed_repos = [repo for repo in db_repos if repo not in starred_repos]
+            
+            # 计算更新时间
+            if has_records:
+                cursor.execute("SELECT MAX(last_updated) as last_update FROM repo_rss_links WHERE user_login = ?", (user_login,))
+                last_update = cursor.fetchone()['last_update']
+            else:
+                last_update = None
+            
+            # 如果没有记录，提示需要更新所有
+            if not has_records:
+                return {
+                    "status": "success",
+                    "need_update": True,
+                    "reason": "没有RSS链接记录，需要初始化",
+                    "last_update": None,
+                    "updates": {
+                        "new_repos": len(starred_repos),
+                        "removed_repos": 0,
+                        "unchanged": 0
+                    }
+                }
+            
+            # 计算是否需要更新
+            need_update = len(new_repos) > 0 or len(removed_repos) > 0
+            
+            return {
+                "status": "success",
+                "need_update": need_update,
+                "reason": "有新的仓库变动" if need_update else "RSS链接已是最新",
+                "last_update": last_update,
+                "updates": {
+                    "new_repos": len(new_repos),
+                    "removed_repos": len(removed_repos),
+                    "unchanged": len(starred_repos) - len(new_repos)
+                }
+            }
+    except Exception as e:
+        print(f"检查RSS更新时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

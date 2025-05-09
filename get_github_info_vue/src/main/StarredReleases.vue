@@ -36,7 +36,7 @@
               <el-tooltip content="批量获取RSS链接" placement="top">
                 <el-button
                     size="small"
-                    @click="handleBatchRss"
+                    @click="handleBatchRss(false)"
                     :disabled="loading"
                     icon="el-icon-link"
                     circle
@@ -504,10 +504,15 @@
         </div>
         <div v-else-if="rssMode === 'batch'" class="batch-rss-container">
           <div class="batch-rss-header">
-            <p>已为您生成 {{ batchRssLinks.length }} 个订阅链接：</p>
+            <div class="batch-info">
+              <p>已为您生成 {{ rssTotal }} 个订阅链接：</p>
+              <el-tag v-if="rssFromCache" size="small" type="success">从缓存加载</el-tag>
+              <el-tag v-else size="small" type="primary">实时获取</el-tag>
+            </div>
             <div class="batch-actions">
               <el-button size="small" type="primary" @click="copyAllRssLinks">一键复制所有链接</el-button>
               <el-button size="small" type="success" @click="downloadOpml">下载 OPML 文件</el-button>
+              <el-button size="small" type="warning" @click="handleBatchRss(true)">刷新链接</el-button>
             </div>
           </div>
 
@@ -518,16 +523,23 @@
                 placeholder="搜索仓库名称..."
                 prefix-icon="el-icon-search"
                 clearable
+                @input="rssCurrentPage = 1"
             ></el-input>
           </div>
 
           <el-table
-              :data="filteredRssLinks"
+              :data="paginatedRssLinks"
               style="width: 100%"
               height="350px"
               border
           >
-            <el-table-column prop="repo_name" label="仓库名称" width="180"></el-table-column>
+            <el-table-column prop="repo_name" label="仓库名称" width="180">
+              <template slot-scope="scope">
+                <a :href="`https://github.com/${scope.row.repo_name}`" target="_blank" class="repo-name-link">
+                  {{ scope.row.repo_name }}
+                </a>
+              </template>
+            </el-table-column>
             <el-table-column prop="rss_link" label="RSS 链接" show-overflow-tooltip>
               <template slot-scope="scope">
                 <div class="table-rss-link">
@@ -543,6 +555,19 @@
               </template>
             </el-table-column>
           </el-table>
+          
+          <!-- 添加分页器 -->
+          <div class="rss-pagination">
+            <el-pagination
+              @size-change="handleRssSizeChange"
+              @current-change="handleRssCurrentChange"
+              :current-page="rssCurrentPage"
+              :page-sizes="[10, 20, 50, 100]"
+              :page-size="rssPageSize"
+              layout="total, sizes, prev, pager, next, jumper"
+              :total="filteredRssLinks.length">
+            </el-pagination>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -623,6 +648,10 @@ export default {
       hoverRepoName: null, // 添加鼠标悬浮的仓库名
       showLargeImage: false,
       currentLargeImage: '',
+      rssFromCache: false, // 添加一个标记表示RSS数据是否来自缓存
+      rssCurrentPage: 1, // 当前RSS分页
+      rssPageSize: 10,   // RSS每页显示数量
+      rssTotal: 0,       // RSS总数量
     }
   },
 
@@ -668,11 +697,16 @@ export default {
       if (!this.rssSearchQuery) {
         return this.batchRssLinks;
       }
-
+      
       const query = this.rssSearchQuery.toLowerCase();
       return this.batchRssLinks.filter(item =>
-          item.repo_name.toLowerCase().includes(query)
+        item.repo_name.toLowerCase().includes(query)
       );
+    },
+    paginatedRssLinks() {
+      const start = (this.rssCurrentPage - 1) * this.rssPageSize;
+      const end = start + this.rssPageSize;
+      return this.filteredRssLinks.slice(start, end);
     }
   },
 
@@ -1310,14 +1344,85 @@ export default {
       }
     },
 
-    // 批量获取RSS链接
-    async handleBatchRss() {
+    // 修改批量获取RSS链接方法
+    async handleBatchRss(forceRefresh = false) {
       this.rssMode = 'batch';
       this.rssLoading = true;
       this.rssDialogVisible = true;
       this.batchRssLinks = [];
-
+      this.rssFromCache = false;
+      this.rssCurrentPage = 1; // 重置页码
+      
       try {
+        // 如果是强制刷新，则先检查是否需要更新
+        if (forceRefresh) {
+          try {
+            // 调用检查更新接口
+            const checkResponse = await axios.get(API_ENDPOINTS.CHECK_RSS_UPDATES, {
+              headers: {
+                Authorization: `Bearer ${this.accessToken}`
+              }
+            });
+            
+            if (checkResponse.data.status === 'success') {
+              const updateInfo = checkResponse.data;
+              
+              // 如果不需要更新，显示提示并直接获取RSS链接
+              if (!updateInfo.need_update) {
+                this.$message({
+                  type: 'info',
+                  message: `RSS链接已是最新，上次更新时间: ${this.formatLastUpdate(updateInfo.last_update)}`
+                });
+                // 不执行刷新，直接获取链接
+                forceRefresh = false;
+              } else {
+                // 需要更新，显示确认对话框
+                const updates = updateInfo.updates;
+                const confirmMessage = `
+                  检测到仓库变动，是否刷新RSS链接？
+                  • 新增仓库: ${updates.new_repos}个
+                  • 移除仓库: ${updates.removed_repos}个
+                  • 保持不变: ${updates.unchanged}个
+                  • 上次更新: ${this.formatLastUpdate(updateInfo.last_update)}
+                `;
+                
+                try {
+                  await this.$confirm(confirmMessage, '提示', {
+                    confirmButtonText: '立即刷新',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                  });
+                } catch (e) {
+                  // 用户取消，不执行刷新
+                  this.rssLoading = false;
+                  forceRefresh = false;
+                  // 还需要获取链接
+                }
+              }
+            }
+          } catch (error) {
+            console.error('检查RSS更新状态失败:', error);
+            this.$message.warning('无法检查RSS更新状态，将直接刷新');
+          }
+        }
+
+        // 如果仍然需要强制刷新，调用刷新接口
+        if (forceRefresh) {
+          try {
+            await axios.post(API_ENDPOINTS.REFRESH_RSS_LINKS, {}, {
+              headers: {
+                Authorization: `Bearer ${this.accessToken}`
+              }
+            });
+          } catch (error) {
+            console.error('刷新RSS链接失败:', error);
+            this.$message.error('刷新RSS链接失败');
+            this.rssLoading = false;
+            return;
+          }
+        }
+
+        // 获取RSS链接
         const response = await axios.get(API_ENDPOINTS.ALL_STARRED_RSS, {
           headers: {
             Authorization: `Bearer ${this.accessToken}`
@@ -1326,6 +1431,13 @@ export default {
 
         if (response.data.status === 'success') {
           this.batchRssLinks = response.data.data;
+          this.rssTotal = response.data.total || this.batchRssLinks.length;
+          this.rssFromCache = response.data.from_cache || false;
+          
+          // 如果强制刷新成功，显示提示
+          if (forceRefresh) {
+            this.$message.success(`成功刷新 ${this.rssTotal} 个RSS链接`);
+          }
         } else {
           this.$message.error('获取RSS链接失败');
         }
@@ -1334,6 +1446,17 @@ export default {
         this.$message.error('批量获取RSS链接失败');
       } finally {
         this.rssLoading = false;
+      }
+    },
+
+    // 格式化最后更新时间
+    formatLastUpdate(isoTimeStr) {
+      if (!isoTimeStr) return '无记录';
+      try {
+        const date = new Date(isoTimeStr);
+        return `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      } catch (e) {
+        return isoTimeStr || '未知';
       }
     },
 
@@ -1358,9 +1481,9 @@ export default {
       document.body.removeChild(textArea);
     },
 
-    // 复制所有RSS链接
+    // 复制所有链接 - 修改为只复制当前筛选的链接
     copyAllRssLinks() {
-      const linkTexts = this.batchRssLinks.map(item => item.rss_link).join('\n');
+      const linkTexts = this.filteredRssLinks.map(item => item.rss_link).join('\n');
       this.copyToClipboard(linkTexts);
     },
 
@@ -1510,6 +1633,22 @@ export default {
       }
 
       return count.toString();
+    },
+
+    // 显示RSS对话框
+    showRssDialog() {
+      this.handleBatchRss(false);
+    },
+
+    // 处理RSS页码变化
+    handleRssCurrentChange(val) {
+      this.rssCurrentPage = val;
+    },
+
+    // 处理RSS每页显示数量变化
+    handleRssSizeChange(val) {
+      this.rssPageSize = val;
+      this.rssCurrentPage = 1;
     },
   },
 
@@ -1829,8 +1968,12 @@ export default {
   border-top: 1px solid #eee;
   border-radius: 0 0 12px 12px;
   background-color: #f8f9fa;
-  width: 100%; /* 设置宽度为100% */
+  width: 100%;
   box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
 }
 
 .github-footer a {
@@ -2709,7 +2852,7 @@ h2 {
 .batch-rss-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 15px;
 }
 
@@ -3237,6 +3380,54 @@ h2 {
 :deep(.trend-dialog .el-dialog__header) {
   padding: 15px 20px;
   border-bottom: 1px solid #ebeef5;
+}
+
+/* 添加RSS操作样式 */
+.rss-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.batch-rss-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 添加RSS表格中的仓库名链接样式 */
+.repo-name-link {
+  color: #409EFF;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-name-link:hover {
+  color: #66b1ff;
+  text-decoration: underline;
+}
+
+/* 添加RSS分页样式 */
+.rss-pagination {
+  margin-top: 15px;
+  text-align: center;
+}
+
+.rss-dialog-button {
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>
 

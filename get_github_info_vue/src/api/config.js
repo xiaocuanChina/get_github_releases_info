@@ -12,5 +12,7 @@ export const API_ENDPOINTS = {
   REPO_RSS_LINK: `${API_BASE_URL}/api/repo-rss-link`,
   BATCH_RSS_LINKS: `${API_BASE_URL}/api/batch-rss-links`,
   ALL_STARRED_RSS: `${API_BASE_URL}/api/all-starred-rss`,
+  REFRESH_RSS_LINKS: `${API_BASE_URL}/api/refresh-rss-links`,
+  CHECK_RSS_UPDATES: `${API_BASE_URL}/api/check-rss-updates`,
   REPO_STARS: `${API_BASE_URL}/api/repo-stars`
 };

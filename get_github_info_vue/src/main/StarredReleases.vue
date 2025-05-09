@@ -181,8 +181,8 @@
                           v-else
                           placement="top"
                           trigger="hover"
-                          :width="280"
-                          popper-class="releases-popover"
+                          width="180"
+                          popper-class="stars-popover"
                       >
                         <template #reference>
                           <div class="multiple-releases">
@@ -324,12 +324,27 @@
                     </div>
                   </el-popover>
                   <!-- 收藏数 -->
-                  <el-tooltip content="收藏数" placement="top">
-                    <div class="stars-count">
-                      <img src="/collect.png" class="star-icon" alt="收藏"/>
-                      <span class="star-count-value">{{ formatStarCount(repo.stargazers_count) }}</span>
+                  <el-popover
+                      placement="top"
+                      trigger="hover"
+                      width="150"
+                      popper-class="stars-popover"
+                  >
+                    <template #reference>
+                      <div class="stars-count">
+                        <img src="/collect.png" class="star-icon" alt="收藏"/>
+                        <span class="star-count-value">{{ formatStarCount(repo.stargazers_count) }}</span>
+                      </div>
+                    </template>
+                    <div class="stars-detail">
+                      <div class="stars-number">有 {{ Number(repo.stargazers_count).toLocaleString() }} 位眼光一致的朋友</div>
+                      <div class="stars-link">
+                        <a :href="`https://github.com/${repo.repo_name}/stargazers`" target="_blank">
+                          点我查看
+                        </a>
+                      </div>
                     </div>
-                  </el-tooltip>
+                  </el-popover>
 
 
                 </div>
@@ -3203,9 +3218,30 @@ h2 {
   align-items: center;
   gap: 8px;
 }
-</style>
 
-<!-- 添加全局样式，使日历控制按钮始终可见 -->
+/* 星标Popover样式 */
+:deep(.stars-popover) {
+  padding: 0;
+}
+
+.stars-detail {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.stars-number {
+  font-size: 13px;
+  color: #606266;
+}
+
+.stars-link {
+  align-self: flex-end;
+}
+
+/* 添加全局样式，使日历控制按钮始终可见 */
 <style>
 /* 覆盖Element UI日历控件的默认行为 */
 .el-calendar-table .el-calendar-day .el-calendar-day__layer {

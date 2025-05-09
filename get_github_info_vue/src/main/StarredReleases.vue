@@ -122,7 +122,7 @@
           <el-card class="footprints-card">
             <template #header>
               <div class="footprints-header">
-                <span>我的足迹</span>
+                <span>关注轨迹</span>
                 <div class="footprints-actions">
                   <!-- 添加跳转到最后浏览时间的按钮 -->
                   <el-tooltip content="跳转到最后浏览" placement="top">

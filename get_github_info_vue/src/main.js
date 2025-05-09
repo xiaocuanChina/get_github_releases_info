@@ -9,6 +9,9 @@ import 'element-ui/lib/theme-chalk/icon.css'
 Vue.use(ElementUI)
 Vue.config.productionTip = false
 
+// 设置网页标题
+document.title = '获取最新Releases列表'
+
 // 添加图标尺寸样式到document
 const style = document.createElement('style')
 style.textContent = `

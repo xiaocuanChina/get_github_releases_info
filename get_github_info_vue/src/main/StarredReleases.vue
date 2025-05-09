@@ -133,7 +133,7 @@
                       <AppIcon name="position"/>
                     </div>
                   </el-tooltip>
-                  <el-tooltip content="刷新足迹" placement="top">
+                  <el-tooltip content="刷新记录" placement="top">
                     <div
                         class="icon-button refresh-icon"
                         :class="{ 'is-loading': logsLoading }"
@@ -149,7 +149,7 @@
 
             <div v-if="logsLoading" class="logs-loading">加载中...</div>
             <el-alert v-else-if="logsError" :title="logsError" type="error" show-icon :closable="false"/>
-            <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有留下任何足迹哦！</div>
+            <div v-else-if="clickLogs.length === 0" class="logs-empty">您还没有关注轨迹哦！</div>
             <div v-else class="footprints-content">
               <el-timeline>
                 <el-timeline-item

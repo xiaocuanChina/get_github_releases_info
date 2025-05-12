@@ -764,6 +764,12 @@ export default {
             eventSource.close()
             setTimeout(() => {
               this.loading = false
+              // 修复1：在获取数据完成后立即获取收藏数
+              this.fetchRepoStars()
+              // 修复2：每次刷新数据后，获取最新的点击记录
+              this.fetchClickLogs(1)
+              // 获取最新的用户活动时间
+              this.checkUserActivityTime()
             }, 500)
           }
         }
@@ -1405,8 +1411,14 @@ export default {
       try {
         // 获取一批仓库的stars信息
         const batchSize = 10; // 每次处理10个仓库
-        for (let i = 0; i < this.releases.length; i += batchSize) {
-          const batch = this.releases.slice(i, i + batchSize);
+        
+        // 先找出所有没有收藏数的仓库或显示"加载中"的仓库
+        const reposToFetch = this.releases.filter(repo => 
+          !repo.stargazers_count || repo.stargazers_count === '加载中'
+        );
+
+        for (let i = 0; i < reposToFetch.length; i += batchSize) {
+          const batch = reposToFetch.slice(i, i + batchSize);
           const repoNames = batch.map(repo => repo.repo_name).join(',');
 
           const response = await axios.get(`${API_ENDPOINTS.REPO_STARS}?repos=${repoNames}`, {
@@ -1475,6 +1487,23 @@ export default {
         this.jumpToDateInCalendar(timeStr);
       }
     },
+
+    // 修复2：添加检查最新用户活动时间的方法
+    async checkUserActivityTime() {
+      try {
+        const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`
+          }
+        })
+
+        if (response.data.status === 'success' && response.data.user.last_activity_time) {
+          this.lastActivityTime = response.data.user.last_activity_time
+        }
+      } catch (error) {
+        console.error('获取最新用户活动时间失败:', error)
+      }
+    },
   },
 
   async mounted() {
@@ -1489,6 +1518,11 @@ export default {
       const isAuthenticated = await this.checkAuthStatus()
       if (isAuthenticated) {
         await this.fetchReleases()
+        // 如果从缓存加载了数据，也要确保获取收藏数
+        if (this.releases.length > 0) {
+          this.fetchRepoStars()
+        }
+
         // 添加：自动加载足迹数据
         this.fetchClickLogs(1)
 
@@ -1496,9 +1530,6 @@ export default {
         this.$nextTick(() => {
           this.addTimelineClickHandlers()
         })
-
-        // 获取仓库收藏数
-        this.fetchRepoStars()
       }
     }
   },
@@ -1524,6 +1555,15 @@ export default {
     },
     releaseTypeFilter() {  // 添加对筛选类型的监听
       this.currentPage = 1
+    },
+    // 添加对releases的监听，当数据加载完成后获取收藏数
+    releases: {
+      handler(newReleases) {
+        if (newReleases && newReleases.length > 0) {
+          this.fetchRepoStars();
+        }
+      },
+      immediate: false
     }
   }
 }

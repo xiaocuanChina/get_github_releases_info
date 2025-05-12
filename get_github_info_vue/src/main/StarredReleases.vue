@@ -1,77 +1,7 @@
 <template>
   <div class="releases-container">
     <!-- 未登录时显示登录组件 -->
-    <div v-if="!isAuthenticated" class="login-container">
-      <div class="login-content">
-        <h2>GitHub Starred Releases</h2>
-        <p class="login-description">跟踪你 Star 的 GitHub 仓库的最新发布</p>
-
-        <div class="features">
-          <div class="feature-item">
-            <div class="feature-icon">
-              <img src="/track.png" alt="追踪" class="feature-img" />
-            </div>
-            <div class="feature-text">
-              <h3>Star 仓库追踪</h3>
-              <p>自动获取你 Star 过的所有 GitHub 仓库的最新发布信息</p>
-            </div>
-          </div>
-          
-          <div class="feature-item">
-            <div class="feature-icon">
-              <img src="/real_time.png" alt="实时更新" class="feature-img" />
-            </div>
-            <div class="feature-text">
-              <h3>实时更新</h3>
-              <p>及时获取最新版本发布通知，不错过任何重要更新</p>
-            </div>
-          </div>
-          
-          <div class="feature-item">
-            <div class="feature-icon">
-              <img src="/view.png" alt="多种视图" class="feature-img" />
-            </div>
-            <div class="feature-text">
-              <h3>多种视图</h3>
-              <p>支持列表视图和日历视图，满足不同的浏览需求</p>
-            </div>
-          </div>
-        </div>
-
-        <el-button type="primary" @click="handleLogin" class="login-button">
-          <GitHubLogo :size="20" class="github-logo" :color="'#ffffff'" />
-          使用 GitHub 登录
-        </el-button>
-
-        <div class="login-footer">
-          <p>本应用仅用于展示你 Star 的仓库更新信息，不会修改你的 GitHub 账户</p>
-        </div>
-      </div>
-
-      <div class="preview-image">
-        <div class="preview-cards-container">
-          <div class="preview-card calendar-card">
-            <div class="preview-img-wrapper">
-              <img src="/calendar_view.png" alt="日历视图" class="preview-img" />
-            </div>
-            <div class="preview-label">
-              <h3>日历视图</h3>
-              <p>按日期查看更新，一目了然掌握项目动态</p>
-            </div>
-          </div>
-          
-          <div class="preview-card list-card">
-            <div class="preview-img-wrapper">
-              <img src="/list_view.png" alt="列表视图" class="preview-img" />
-            </div>
-            <div class="preview-label">
-              <h3>列表视图</h3>
-              <p>详细展示更新内容，方便深入了解</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <GitHubLogin v-if="!isAuthenticated" />
 
     <!-- 登录后显示主内容 -->
     <template v-else>
@@ -572,6 +502,46 @@ import {API_ENDPOINTS} from '@/api/config'  // 导入 API 配置
 import GitHubLogo from '@/components/GitHubLogo.vue'  // 导入 GitHubLogo 组件
 import FootprintsPanel from '@/components/FootprintsPanel.vue'  // 导入关注轨迹组件
 import RssLinksList from '@/components/RssLinksList.vue'  // 导入RSS链接列表组件
+import GitHubLogin from '@/components/GitHubLogin.vue'  // 导入GitHubLogin组件
+
+// 设置axios全局拦截器，统一处理401错误
+const handleUnauthorized = () => {
+  console.log('Token已过期或无效，自动清除并退出登录')
+  
+  // 清除本地存储
+  localStorage.removeItem('github_token')
+  localStorage.removeItem('releases_cache')
+  localStorage.removeItem('last_fetch_time')
+  
+  // 显示提示消息
+  if (window.$message) {
+    window.$message({
+      type: 'warning',
+      message: 'GitHub授权已过期，请重新登录',
+      duration: 5000
+    })
+  }
+  
+  // 重新加载页面，回到登录状态
+  setTimeout(() => {
+    window.location.reload()
+  }, 1000)
+}
+
+// 添加响应拦截器
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response && error.response.status === 401) {
+      // 只处理一次401错误，避免重复处理
+      if (!window.isHandlingAuth401) {
+        window.isHandlingAuth401 = true
+        handleUnauthorized()
+      }
+    }
+    return Promise.reject(error)
+  }
+)
 
 export default {
   name: 'StarredReleases',
@@ -579,7 +549,8 @@ export default {
   components: {
     GitHubLogo,  // 确保组件名称匹配模板中使用的名称
     FootprintsPanel,  // 添加关注轨迹组件
-    RssLinksList  // 添加RSS链接列表组件
+    RssLinksList,  // 添加RSS链接列表组件
+    GitHubLogin,  // 添加GitHubLogin组件
   },
 
   data() {
@@ -769,7 +740,10 @@ export default {
           }
         } catch (error) {
           console.error('Token 验证失败:', error)
-          this.clearCache()
+          // 自动处理401错误
+          if (error.response && error.response.status === 401) {
+            this.handleTokenExpired()
+          }
           // ... 其他错误处理 ...
         }
       }
@@ -840,6 +814,13 @@ export default {
               this.checkUserActivityTime()
             }, 500)
           }
+          
+          // 处理401错误（token过期或无效）
+          if (data.status === 'error' && data.message && data.message.includes('401')) {
+            eventSource.close()
+            this.loading = false
+            this.handleTokenExpired()
+          }
         }
 
         eventSource.onerror = (error) => {
@@ -847,6 +828,11 @@ export default {
           eventSource.close()
           this.loading = false
           this.error = '获取数据失败'
+          
+          // 尝试检查是否是认证问题
+          this.checkAuthStatus().catch(err => {
+            console.error('检查认证状态失败:', err)
+          })
         }
 
       } catch (error) {
@@ -860,10 +846,29 @@ export default {
             message: '请求过于频繁，请稍后再试',
             duration: 5000
           })
+        } else if (error.response?.status === 401) {
+          // 处理401错误
+          this.handleTokenExpired()
         } else {
           this.error = error.response?.data?.detail || '获取数据失败'
         }
       }
+    },
+    
+    // 添加一个统一处理token过期的方法
+    handleTokenExpired() {
+      console.log('Token已过期或无效，自动清除并退出登录')
+      this.clearCache() // 清除缓存
+      localStorage.removeItem('github_token') // 清除token
+      this.isAuthenticated = false
+      this.userInfo = null
+      this.accessToken = null
+      this.releases = []
+      this.$message({
+        type: 'warning',
+        message: 'GitHub授权已过期，请重新登录',
+        duration: 5000
+      })
     },
 
     handleSizeChange(val) {
@@ -1570,17 +1575,39 @@ export default {
         }
       } catch (error) {
         console.error('获取最新用户活动时间失败:', error)
+        // 处理401错误，表示token过期或无效
+        if (error.response && error.response.status === 401) {
+          this.handleTokenExpired()
+        }
       }
     },
   },
 
   async mounted() {
+    // 设置Element UI的Message组件为全局变量，以便拦截器可以访问
+    window.$message = this.$message;
+    
     // 检查 URL 中是否有认证码
     const urlParams = new URLSearchParams(window.location.search)
     const code = urlParams.get('code')
 
+    // 在控制台输出当前URL，帮助调试
+    console.log('当前URL:', window.location.href);
+    console.log('获取到code参数:', code);
+
     if (code) {
-      await this.handleCallback(code)
+      try {
+        // 显示加载中提示
+        this.$message({
+          message: '正在处理GitHub授权...',
+          type: 'info',
+          duration: 2000
+        });
+        await this.handleCallback(code);
+      } catch (error) {
+        console.error('处理GitHub回调时发生错误:', error);
+        this.$message.error('GitHub授权失败，请重试');
+      }
     } else {
       // 检查存储的 token 是否有效
       const isAuthenticated = await this.checkAuthStatus()
@@ -3688,24 +3715,24 @@ h2 {
     padding-top: 40px;
     padding-bottom: 40px;
   }
-  
+
   .login-content,
   .preview-image {
     max-width: 100%;
   }
-  
+
   .preview-cards-container {
     max-width: 100%;
     flex-direction: row;
     justify-content: center;
     flex-wrap: wrap;
   }
-  
+
   .preview-card {
     max-width: 350px;
     height: 320px; /* 在响应式布局中稍微增加高度 */
   }
-  
+
   .login-description {
     max-width: 100%;
   }
@@ -3715,11 +3742,11 @@ h2 {
   .login-content {
     padding: 30px 20px;
   }
-  
+
   .login-button {
     width: 100%;
   }
-  
+
   .preview-image {
     display: none; /* 在小屏幕上隐藏预览图 */
   }

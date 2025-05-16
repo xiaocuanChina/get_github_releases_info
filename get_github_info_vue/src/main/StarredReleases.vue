@@ -65,28 +65,54 @@
 
       <!-- 搜索区域和控件组，移除scrolled类 -->
       <div class="search-controls-container">
-        <!-- 搜索框 -->
-        <el-input
-            v-model="searchQuery"
-            placeholder="搜索仓库..."
-            prefix-icon="el-icon-search"
-            clearable
-            class="search-input"
-        />
+        <!-- 搜索框和范围选择 -->
+        <div class="search-input-container">
+          <!-- 添加搜索范围选择 -->
+          <div class="search-scope-selector">
+            <div class="control-label">搜索范围：</div>
+            <div class="view-controls">
+              <el-tooltip content="在已收藏的仓库中搜索" placement="top">
+                <div class="icon-button" :class="{ active: searchScope === 'starred' }" @click="searchScope = 'starred'">
+                  <i class="el-icon-star-off"></i>
+                </div>
+              </el-tooltip>
+              <el-tooltip content="在全局GitHub中搜索" placement="top">
+                <div class="icon-button" :class="{ active: searchScope === 'global' }" @click="searchScope = 'global'">
+                  <i class="el-icon-place"></i>
+                </div>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <!-- 搜索框 -->
+          <el-input
+              v-model="searchQuery"
+              :placeholder="searchScope === 'starred' ? '搜索仓库...' : '在GitHub中搜索...'"
+              prefix-icon="el-icon-search"
+              clearable
+              class="search-input"
+              @keyup="handleSearchKeyPress"
+          >
+            <!-- 全局搜索按钮 -->
+            <template v-if="searchScope === 'global'" #append>
+              <el-button @click="handleGlobalSearch" icon="el-icon-search">搜索</el-button>
+            </template>
+          </el-input>
+        </div>
 
         <!-- 控件区域 -->
-        <div class="view-filter-controls">
+        <div class="view-filter-controls" v-if="searchScope === 'starred'">
           <div class="control-group">
             <div class="control-label">视图：</div>
             <div class="view-controls">
               <el-tooltip content="列表视图" placement="top">
                 <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
-                  <AppIcon name="tickets"/>
+                  <i class="el-icon-tickets"></i>
                 </div>
               </el-tooltip>
               <el-tooltip content="日历视图" placement="top">
                 <div class="icon-button" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
-                  <AppIcon name="date"/>
+                  <i class="el-icon-date"></i>
                 </div>
               </el-tooltip>
             </div>
@@ -97,17 +123,17 @@
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
                 <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
-                  <AppIcon name="document"/>
+                  <i class="el-icon-view"></i>
                 </div>
               </el-tooltip>
               <el-tooltip content="仅源代码（无下载内容）" placement="top">
                 <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'">
-                  <AppIcon name="document-delete"/>
+                  <i class="el-icon-document"></i>
                 </div>
               </el-tooltip>
               <el-tooltip content="包含二进制" placement="top">
                 <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'">
-                  <AppIcon name="download"/>
+                  <i class="el-icon-coin"></i>
                 </div>
               </el-tooltip>
             </div>
@@ -118,21 +144,27 @@
             <div class="filter-controls">
               <el-tooltip content="显示全部" placement="top">
                 <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
-                  <AppIcon name="files"/>
+                  <i class="el-icon-view"></i>
                 </div>
               </el-tooltip>
               <el-tooltip content="仅正式版" placement="top">
                 <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'">
-                  <AppIcon name="success"/>
+                  <i class="el-icon-check"></i>
                 </div>
               </el-tooltip>
               <el-tooltip content="仅预发布" placement="top">
                 <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'">
-                  <AppIcon name="warning"/>
+                  <i class="el-icon-bell"></i>
                 </div>
               </el-tooltip>
             </div>
           </div>
+        </div>
+        
+        <!-- 全局搜索提示 -->
+        <div class="global-search-tip" v-if="searchScope === 'global'">
+          <img src="/global_search.png" class="tip-icon" alt="全局搜索" />
+          全局搜索模式下，请输入关键词并点击搜索按钮或按回车键进行搜索
         </div>
       </div>
 
@@ -244,7 +276,7 @@
                     <!-- 修改：最后活动提示 -->
                     <div v-if="isLastActivityDate(data.day)" class="last-activity-indicator">
                       <el-tooltip content="上次活动" placement="top">
-                        <AppIcon name="user"/>
+                        <img src="/track.png" class="user-activity-icon" alt="上次活动" />
                       </el-tooltip>
                     </div>
                   </div>
@@ -600,6 +632,7 @@ export default {
       rssCurrentPage: 1, // 当前RSS分页
       rssPageSize: 10,   // RSS每页显示数量
       rssTotal: 0,       // RSS总数量,
+      searchScope: 'starred', // 添加搜索范围选择
     }
   },
 
@@ -740,10 +773,7 @@ export default {
           }
         } catch (error) {
           console.error('Token 验证失败:', error)
-          // 自动处理401错误
-          if (error.response && error.response.status === 401) {
-            this.handleTokenExpired()
-          }
+          // 拦截器将自动处理401错误，这里不需要额外代码
           // ... 其他错误处理 ...
         }
       }
@@ -819,7 +849,7 @@ export default {
           if (data.status === 'error' && data.message && data.message.includes('401')) {
             eventSource.close()
             this.loading = false
-            this.handleTokenExpired()
+            // 拦截器会自动处理401错误，这里只需关闭连接和更新状态
           }
         }
 
@@ -847,30 +877,13 @@ export default {
             duration: 5000
           })
         } else if (error.response?.status === 401) {
-          // 处理401错误
-          this.handleTokenExpired()
+          // 401错误由全局拦截器统一处理
         } else {
           this.error = error.response?.data?.detail || '获取数据失败'
         }
       }
     },
     
-    // 添加一个统一处理token过期的方法
-    handleTokenExpired() {
-      console.log('Token已过期或无效，自动清除并退出登录')
-      this.clearCache() // 清除缓存
-      localStorage.removeItem('github_token') // 清除token
-      this.isAuthenticated = false
-      this.userInfo = null
-      this.accessToken = null
-      this.releases = []
-      this.$message({
-        type: 'warning',
-        message: 'GitHub授权已过期，请重新登录',
-        duration: 5000
-      })
-    },
-
     handleSizeChange(val) {
       this.pageSize = val
       this.currentPage = 1  // 重置到第一页
@@ -1575,9 +1588,47 @@ export default {
         }
       } catch (error) {
         console.error('获取最新用户活动时间失败:', error)
-        // 处理401错误，表示token过期或无效
-        if (error.response && error.response.status === 401) {
-          this.handleTokenExpired()
+        // 401错误由全局拦截器统一处理
+      }
+    },
+
+    handleGlobalSearch() {
+      // 在这里添加全局搜索的逻辑
+      if (!this.searchQuery.trim()) {
+        this.$message.warning('请输入搜索关键词');
+        return;
+      }
+      
+      // 构建GitHub搜索URL
+      const searchUrl = `https://github.com/search?q=${encodeURIComponent(this.searchQuery)}`;
+      
+      // 打开新窗口进行搜索
+      window.open(searchUrl, '_blank');
+      
+      // 记录搜索行为
+      if (this.accessToken) {
+        try {
+          axios.post(API_ENDPOINTS.RECORD_SEARCH, {
+            search_query: this.searchQuery,
+            search_scope: 'global'
+          }, {
+            headers: { Authorization: `Bearer ${this.accessToken}` }
+          }).catch(error => {
+            console.error('记录搜索行为失败:', error);
+          });
+        } catch (error) {
+          console.error('记录搜索行为失败:', error);
+        }
+      }
+    },
+
+    // 监听回车键进行搜索
+    handleSearchKeyPress(e) {
+      if (e.key === 'Enter') {
+        if (this.searchScope === 'global') {
+          this.handleGlobalSearch();
+        } else {
+          // 本地过滤已经在computed属性中完成
         }
       }
     },
@@ -1659,6 +1710,16 @@ export default {
         }
       },
       immediate: false
+    },
+    // 添加对搜索范围的监听
+    searchScope(newScope) {
+      // 当搜索范围变化时，清空搜索框
+      this.searchQuery = '';
+      
+      // 如果切换到全局搜索，将视图模式设置为列表
+      if (newScope === 'global') {
+        this.viewMode = 'list';
+      }
     }
   }
 }
@@ -1748,10 +1809,43 @@ export default {
   box-sizing: border-box;
 }
 
-.search-input {
+.search-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex: 1;
   min-width: 300px;
-  margin: 0;
+}
+
+.search-scope-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.search-input {
+  flex: 1;
+}
+
+/* 搜索按钮样式 */
+:deep(.el-input-group__append) {
+  padding: 0;
+  background-color: #409EFF;
+  border-color: #409EFF;
+}
+
+:deep(.el-input-group__append .el-button) {
+  border: none;
+  background: transparent;
+  color: white;
+  padding: 0 15px;
+  height: 100%;
+}
+
+:deep(.el-input-group__append .el-button:hover) {
+  background-color: #66b1ff;
+  color: white;
 }
 
 .view-filter-controls {
@@ -2489,6 +2583,16 @@ h2 {
   .repo-description {
     -webkit-line-clamp: 3; /* 在小屏幕上允许显示更多行 */
     max-height: 63px; /* 约3行的高度 */
+  }
+
+  .search-input-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  
+  .search-scope-selector {
+    justify-content: center;
   }
 }
 
@@ -3750,5 +3854,73 @@ h2 {
   .preview-image {
     display: none; /* 在小屏幕上隐藏预览图 */
   }
+}
+
+.search-input-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-scope-selector {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 全局搜索提示样式 */
+.global-search-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #ecf5ff;
+  color: #409eff;
+  padding: 10px 15px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+  border-left: 3px solid #409eff;
+}
+
+.global-search-tip i {
+  font-size: 16px;
+}
+
+/* 在手机端减小内边距 */
+@media (max-width: 768px) {
+  .global-search-tip {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
+
+/* CSS样式添加 */
+.scope-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.tip-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
+.icon-button.active img.scope-icon {
+  filter: brightness(0) invert(1); /* 使图标在选中状态下变为白色 */
+}
+
+/* 防止图标在点击状态下模糊 */
+.icon-button img.scope-icon {
+  transition: all 0.3s;
+  transform: scale(1);
+}
+
+/* 添加最后活动图标样式 */
+.user-activity-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
 }
 </style>

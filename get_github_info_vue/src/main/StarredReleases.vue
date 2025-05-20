@@ -1,7 +1,15 @@
 <template>
   <div class="releases-container">
     <!-- 未登录时显示登录组件 -->
-    <GitHubLogin v-if="!isAuthenticated" />
+    <GitHubLogin v-if="!isAuthenticated" @auth-success="handleAuthSuccess" />
+
+    <!-- 调试帮助组件，仅在未登录状态下显示 -->
+    <div v-if="!isAuthenticated" class="debug-helper-container">
+      <el-button type="text" @click="showDebugHelper = !showDebugHelper">
+        {{ showDebugHelper ? '关闭' : '显示' }}认证调试助手
+      </el-button>
+      <DebugHelper v-if="showDebugHelper" />
+    </div>
 
     <!-- 登录后显示主内容 -->
     <template v-else>
@@ -65,9 +73,11 @@
 
       <!-- 搜索区域和控件组，移除scrolled类 -->
       <div class="search-controls-container">
-        <!-- 搜索框和范围选择 -->
-        <div class="search-input-container">
-          <!-- 添加搜索范围选择 -->
+        <!-- 这个区域已移到搜索工具栏中，这里不再需要 -->
+
+        <!-- 搜索控制工具栏 -->
+        <div class="search-toolbar">
+          <!-- 左侧：搜索范围选择 -->
           <div class="search-scope-selector">
             <div class="control-label">搜索范围：</div>
             <div class="view-controls">
@@ -83,89 +93,97 @@
               </el-tooltip>
             </div>
           </div>
-
-          <!-- 搜索框 -->
-          <el-input
-              v-model="searchQuery"
-              :placeholder="searchScope === 'starred' ? '搜索仓库...' : '在GitHub中搜索...'"
-              prefix-icon="el-icon-search"
-              clearable
-              class="search-input"
-              @keyup="handleSearchKeyPress"
-          >
-            <!-- 全局搜索按钮 -->
-            <template v-if="searchScope === 'global'" #append>
-              <el-button @click="handleGlobalSearch" icon="el-icon-search">搜索</el-button>
-            </template>
-          </el-input>
-        </div>
-
-        <!-- 控件区域 -->
-        <div class="view-filter-controls" v-if="searchScope === 'starred'">
-          <div class="control-group">
-            <div class="control-label">视图：</div>
-            <div class="view-controls">
-              <el-tooltip content="列表视图" placement="top">
-                <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
-                  <i class="el-icon-tickets"></i>
+          
+          <!-- 中间：搜索框 -->
+          <div class="search-input-wrapper">
+            <el-input
+                v-model="searchQuery"
+                :placeholder="searchScope === 'starred' ? '搜索仓库...' : '在GitHub中搜索...'"
+                prefix-icon="el-icon-search"
+                clearable
+                class="search-input"
+                @keyup="handleSearchKeyPress"
+            >
+              <!-- 全局搜索按钮 -->
+              <template v-if="searchScope === 'global'" #append>
+                <el-button @click="handleGlobalSearch" icon="el-icon-search" class="global-search-btn">搜索</el-button>
+              </template>
+            </el-input>
+          </div>
+          
+          <!-- 右侧：控制栏和提示 -->
+          <div class="controls-and-tips">
+            <!-- 控件区域 -->
+            <div v-if="searchScope === 'starred'" class="controls-container">
+              <div class="view-filter-controls">
+                <div class="control-group">
+                  <div class="control-label">视图：</div>
+                  <div class="view-controls">
+                    <el-tooltip content="列表视图" placement="top">
+                      <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
+                        <i class="el-icon-tickets"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip content="日历视图" placement="top">
+                      <div class="icon-button" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
+                        <i class="el-icon-date"></i>
+                      </div>
+                    </el-tooltip>
+                  </div>
                 </div>
-              </el-tooltip>
-              <el-tooltip content="日历视图" placement="top">
-                <div class="icon-button" :class="{ active: viewMode === 'calendar' }" @click="viewMode = 'calendar'">
-                  <i class="el-icon-date"></i>
+
+                <div class="control-group">
+                  <div class="control-label">内容：</div>
+                  <div class="filter-controls">
+                    <el-tooltip content="显示全部" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
+                        <i class="el-icon-view"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip content="仅源代码" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'">
+                        <i class="el-icon-document"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip content="包含二进制" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'">
+                        <i class="el-icon-coin"></i>
+                      </div>
+                    </el-tooltip>
+                  </div>
                 </div>
-              </el-tooltip>
+
+                <div class="control-group">
+                  <div class="control-label">版本：</div>
+                  <div class="filter-controls">
+                    <el-tooltip content="显示全部" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
+                        <i class="el-icon-view"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip content="仅正式版" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'">
+                        <i class="el-icon-check"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip content="仅预发布" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'">
+                        <i class="el-icon-bell"></i>
+                      </div>
+                    </el-tooltip>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 全局搜索模式提示 -->
+            <div v-if="searchScope === 'global'" class="global-search-tip">
+              <img src="/global_search.png" class="tip-icon" alt="全局搜索" />
+              <span>在GitHub上搜索</span>
             </div>
           </div>
-
-          <div class="control-group">
-            <div class="control-label">内容筛选：</div>
-            <div class="filter-controls">
-              <el-tooltip content="显示全部" placement="top">
-                <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
-                  <i class="el-icon-view"></i>
-                </div>
-              </el-tooltip>
-              <el-tooltip content="仅源代码（无下载内容）" placement="top">
-                <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'">
-                  <i class="el-icon-document"></i>
-                </div>
-              </el-tooltip>
-              <el-tooltip content="包含二进制" placement="top">
-                <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'">
-                  <i class="el-icon-coin"></i>
-                </div>
-              </el-tooltip>
-            </div>
-          </div>
-
-          <div class="control-group">
-            <div class="control-label">版本类型：</div>
-            <div class="filter-controls">
-              <el-tooltip content="显示全部" placement="top">
-                <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
-                  <i class="el-icon-view"></i>
-                </div>
-              </el-tooltip>
-              <el-tooltip content="仅正式版" placement="top">
-                <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'">
-                  <i class="el-icon-check"></i>
-                </div>
-              </el-tooltip>
-              <el-tooltip content="仅预发布" placement="top">
-                <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'">
-                  <i class="el-icon-bell"></i>
-                </div>
-              </el-tooltip>
-            </div>
-          </div>
         </div>
-        
-        <!-- 全局搜索提示 -->
-        <div class="global-search-tip" v-if="searchScope === 'global'">
-          <img src="/global_search.png" class="tip-icon" alt="全局搜索" />
-          全局搜索模式下，请输入关键词并点击搜索按钮或按回车键进行搜索
-        </div>
+
       </div>
 
       <!-- 主内容区域使用左右布局 -->
@@ -535,43 +553,18 @@ import GitHubLogo from '@/components/GitHubLogo.vue'  // 导入 GitHubLogo 组�
 import FootprintsPanel from '@/components/FootprintsPanel.vue'  // 导入关注轨迹组件
 import RssLinksList from '@/components/RssLinksList.vue'  // 导入RSS链接列表组件
 import GitHubLogin from '@/components/GitHubLogin.vue'  // 导入GitHubLogin组件
+import DebugHelper from '@/components/DebugHelper.vue'  // 导入DebugHelper组件
 
-// 设置axios全局拦截器，统一处理401错误
-const handleUnauthorized = () => {
-  console.log('Token已过期或无效，自动清除并退出登录')
-  
-  // 清除本地存储
-  localStorage.removeItem('github_token')
-  localStorage.removeItem('releases_cache')
-  localStorage.removeItem('last_fetch_time')
-  
-  // 显示提示消息
-  if (window.$message) {
-    window.$message({
-      type: 'warning',
-      message: 'GitHub授权已过期，请重新登录',
-      duration: 5000
-    })
-  }
-  
-  // 重新加载页面，回到登录状态
-  setTimeout(() => {
-    window.location.reload()
-  }, 1000)
-}
-
-// 添加响应拦截器
+// 添加响应拦截器，但不自动重载页面
+// 让组件自己处理授权错误
 axios.interceptors.response.use(
   response => response,
   error => {
+    // 记录但不自动处理，由组件处理
     if (error.response && error.response.status === 401) {
-      // 只处理一次401错误，避免重复处理
-      if (!window.isHandlingAuth401) {
-        window.isHandlingAuth401 = true
-        handleUnauthorized()
-      }
+      console.log('检测到401错误，组件将处理授权');
     }
-    return Promise.reject(error)
+    return Promise.reject(error);
   }
 )
 
@@ -583,6 +576,7 @@ export default {
     FootprintsPanel,  // 添加关注轨迹组件
     RssLinksList,  // 添加RSS链接列表组件
     GitHubLogin,  // 添加GitHubLogin组件
+    DebugHelper,  // 添加DebugHelper组件
   },
 
   data() {
@@ -633,12 +627,18 @@ export default {
       rssPageSize: 10,   // RSS每页显示数量
       rssTotal: 0,       // RSS总数量,
       searchScope: 'starred', // 添加搜索范围选择
+      showDebugHelper: false, // 添加调试助手显示状态
     }
   },
 
   computed: {
     filteredRepos() {
       let result = this.releases;
+
+      // 如果是全局搜索模式，不过滤本地列表
+      if (this.searchScope === 'global') {
+        return result;
+      }
 
       // 按内容类型筛选
       if (this.contentFilter !== 'all') {
@@ -700,6 +700,18 @@ export default {
   },
 
   methods: {
+    // 处理来自GitHubLogin组件的认证成功事件
+    handleAuthSuccess(authData) {
+      console.log('收到认证成功事件:', authData);
+      this.accessToken = authData.token;
+      this.isAuthenticated = true;
+      this.userInfo = authData.user;
+      this.lastActivityTime = authData.user.last_activity_time;
+      
+      // 获取数据
+      this.fetchReleases();
+    },
+    
     async fetchUserInfo() {
       try {
         const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY.replace('/verify', '/user'), {
@@ -740,71 +752,186 @@ export default {
     },
 
     async checkAuthStatus() {
-      const storedToken = localStorage.getItem('github_token')
-      if (storedToken) {
-        try {
-          const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
-            headers: {
-              Authorization: `Bearer ${storedToken}`
-            }
-          })
-
-          if (response.data.status === 'success') {
-            this.accessToken = storedToken
-            this.isAuthenticated = true
-            this.userInfo = response.data.user
-            this.lastActivityTime = response.data.user.last_activity_time // 修改：存储最后活动时间
-
-            // 检查是否需要重新获取数据
-            const now = new Date().getTime()
-            const lastFetch = localStorage.getItem('last_fetch_time')
-
-            if (!lastFetch || (now - parseInt(lastFetch)) > this.minFetchInterval) {
-              await this.fetchReleases()
-            } else {
-              // 使用缓存的数据
-              const cachedData = localStorage.getItem('releases_cache')
-              if (cachedData) {
-                this.releases = JSON.parse(cachedData)
-                console.log('使用本地缓存数据')
-              }
-            }
-            return true
+      console.log('正在检查认证状态...');
+      const storedToken = localStorage.getItem('github_token');
+      if (!storedToken) {
+        console.log('未找到存储的token');
+        this.isAuthenticated = false;
+        return false;
+      }
+      
+      try {
+        console.log('开始验证token有效性...');
+        const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
+          headers: {
+            Authorization: `Bearer ${storedToken}`
           }
-        } catch (error) {
-          console.error('Token 验证失败:', error)
-          // 拦截器将自动处理401错误，这里不需要额外代码
-          // ... 其他错误处理 ...
+        });
+
+        if (response.data.status === 'success') {
+          console.log('Token验证成功');
+          this.accessToken = storedToken;
+          this.isAuthenticated = true;
+          this.userInfo = response.data.user;
+          this.lastActivityTime = response.data.user.last_activity_time; // 修改：存储最后活动时间
+
+          // 检查是否需要重新获取数据
+          const now = new Date().getTime();
+          const lastFetch = localStorage.getItem('last_fetch_time');
+
+          if (!lastFetch || (now - parseInt(lastFetch)) > this.minFetchInterval) {
+            console.log('需要获取最新数据');
+            await this.fetchReleases();
+          } else {
+            // 使用缓存的数据
+            const cachedData = localStorage.getItem('releases_cache');
+            if (cachedData) {
+              try {
+                this.releases = JSON.parse(cachedData);
+                console.log('使用本地缓存数据');
+              } catch (e) {
+                console.error('解析缓存数据失败:', e);
+                await this.fetchReleases(); // 如果解析失败，重新获取数据
+              }
+            } else {
+              await this.fetchReleases(); // 没有缓存数据，获取新数据
+            }
+          }
+          return true;
+        } else {
+          console.warn('Token验证不成功:', response.data);
+          this.handleInvalidToken();
+          return false;
+        }
+      } catch (error) {
+        console.error('Token验证失败:', error);
+        
+        // 判断是否为401错误
+        if (error.response && error.response.status === 401) {
+          this.handleInvalidToken();
+        } else {
+          // 其他错误，尝试继续使用缓存
+          const cachedData = localStorage.getItem('releases_cache');
+          if (cachedData) {
+            try {
+              this.releases = JSON.parse(cachedData);
+              console.log('由于验证错误，使用本地缓存数据');
+              this.$message.warning('验证服务暂时不可用，使用缓存数据');
+              return true;
+            } catch (e) {
+              console.error('解析缓存数据失败:', e);
+            }
+          }
         }
       }
-      return false
+      return false;
+    },
+    
+    // 处理无效token的情况
+    handleInvalidToken() {
+      console.log('token无效，清除登录状态');
+      localStorage.removeItem('github_token');
+      // 不要立即删除缓存，可能还需要显示
+      this.isAuthenticated = false;
+      this.accessToken = null;
+      this.userInfo = null;
+      
+      this.$message({
+        type: 'warning',
+        message: 'GitHub授权已失效，请重新登录',
+        duration: 5000
+      });
     },
 
     async handleCallback(code) {
       try {
-        const response = await axios.get(`${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`)
-        this.accessToken = response.data.access_token
-        this.isAuthenticated = true
-        localStorage.setItem('github_token', this.accessToken)
+        console.log('向后端发送授权码，获取访问令牌...');
+        const response = await axios.get(`${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`);
+        
+        console.log('接收到后端响应:', response.data);
+        
+        // 检查新的响应格式
+        if (response.data.status === 'success' && response.data.access_token) {
+          // 成功获取token
+          const accessToken = response.data.access_token;
+          
+          // 保存token
+          this.accessToken = accessToken;
+          this.isAuthenticated = true;
+          localStorage.setItem('github_token', this.accessToken);
+          console.log('成功获取访问令牌并保存');
+          
+          // 如果响应中包含用户信息，直接使用
+          if (response.data.user) {
+            this.userInfo = response.data.user;
+            console.log('从响应中获取到用户信息');
+          } else {
+            // 否则获取用户信息
+            await this.fetchUserInfo();
+          }
+          
+          // 如果有保存的重定向地址，则跳转回去
+          const redirectUrl = localStorage.getItem('redirect_after_login');
+          if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            console.log('检测到重定向URL，跳转到:', redirectUrl);
+            window.location.href = redirectUrl;
+            return; // 中断后续操作，因为页面将重定向
+          }
+          
+          return true; // 回调处理成功
+        } else if (response.data.status === 'error') {
+          // 处理错误响应
+          const errorMsg = response.data.error || '授权失败';
+          console.error('GitHub授权失败:', errorMsg);
+          
+          // 显示错误信息
+          this.$message.error(`GitHub授权失败: ${errorMsg}`);
+          
+          // 清除token
+          this.error = 'GitHub 认证失败';
+          this.isAuthenticated = false;
+          localStorage.removeItem('github_token');
+          
+          throw new Error(errorMsg);
+        } else {
+          // 旧格式或意外响应格式
+          if (!response.data.access_token) {
+            throw new Error('后端未返回访问令牌');
+          }
+          
+          // 保存token (旧格式)
+          this.accessToken = response.data.access_token;
+          this.isAuthenticated = true;
+          localStorage.setItem('github_token', this.accessToken);
+          console.log('成功获取访问令牌并保存 (旧格式)');
 
-        // 获取用户信息
-        await this.fetchUserInfo()
-        await this.fetchReleases()
-
-        // 清除 URL 中的 code 参数
-        window.history.replaceState({}, document.title, window.location.pathname)
-
-        // 如果有保存的重定向地址，则跳转回去
-        const redirectUrl = localStorage.getItem('redirect_after_login')
-        if (redirectUrl) {
-          localStorage.removeItem('redirect_after_login')
-          window.location.href = redirectUrl
+          // 获取用户信息
+          await this.fetchUserInfo();
+          
+          // 如果有保存的重定向地址，则跳转回去
+          const redirectUrl = localStorage.getItem('redirect_after_login');
+          if (redirectUrl) {
+            localStorage.removeItem('redirect_after_login');
+            console.log('检测到重定向URL，跳转到:', redirectUrl);
+            window.location.href = redirectUrl;
+            return; // 中断后续操作，因为页面将重定向
+          }
+          
+          return true; // 回调处理成功
         }
       } catch (error) {
-        console.error('认证失败:', error)
-        this.error = 'GitHub 认证失败'
-        this.isAuthenticated = false
-        localStorage.removeItem('github_token')
+        console.error('GitHub授权回调处理失败:', error);
+        
+        // 显示错误信息
+        this.$message.error(error.response?.data?.detail || error.message || 'GitHub 授权失败，请重试');
+        
+        // 清除任何可能保存的token
+        this.error = 'GitHub 认证失败';
+        this.isAuthenticated = false;
+        localStorage.removeItem('github_token');
+        
+        throw error; // 抛出异常以便调用者知道处理失败
       }
     },
 
@@ -844,7 +971,7 @@ export default {
               this.checkUserActivityTime()
             }, 500)
           }
-          
+
           // 处理401错误（token过期或无效）
           if (data.status === 'error' && data.message && data.message.includes('401')) {
             eventSource.close()
@@ -858,7 +985,7 @@ export default {
           eventSource.close()
           this.loading = false
           this.error = '获取数据失败'
-          
+
           // 尝试检查是否是认证问题
           this.checkAuthStatus().catch(err => {
             console.error('检查认证状态失败:', err)
@@ -883,7 +1010,7 @@ export default {
         }
       }
     },
-    
+
     handleSizeChange(val) {
       this.pageSize = val
       this.currentPage = 1  // 重置到第一页
@@ -1598,13 +1725,13 @@ export default {
         this.$message.warning('请输入搜索关键词');
         return;
       }
-      
+
       // 构建GitHub搜索URL
       const searchUrl = `https://github.com/search?q=${encodeURIComponent(this.searchQuery)}`;
-      
+
       // 打开新窗口进行搜索
       window.open(searchUrl, '_blank');
-      
+
       // 记录搜索行为
       if (this.accessToken) {
         try {
@@ -1629,55 +1756,113 @@ export default {
           this.handleGlobalSearch();
         } else {
           // 本地过滤已经在computed属性中完成
+          // 当本地搜索时，按回车不做额外操作
+          e.preventDefault(); // 防止表单提交
         }
       }
     },
   },
 
   async mounted() {
-    // 设置Element UI的Message组件为全局变量，以便拦截器可以访问
-    window.$message = this.$message;
+    console.log('组件挂载，开始初始化...');
+    
+    // 检查当前路径是否是auth/callback
+    const isCallback = window.location.pathname.includes('/auth/callback');
     
     // 检查 URL 中是否有认证码
-    const urlParams = new URLSearchParams(window.location.search)
-    const code = urlParams.get('code')
-
-    // 在控制台输出当前URL，帮助调试
-    console.log('当前URL:', window.location.href);
-    console.log('获取到code参数:', code);
-
-    if (code) {
-      try {
-        // 显示加载中提示
-        this.$message({
-          message: '正在处理GitHub授权...',
-          type: 'info',
-          duration: 2000
-        });
-        await this.handleCallback(code);
-      } catch (error) {
-        console.error('处理GitHub回调时发生错误:', error);
-        this.$message.error('GitHub授权失败，请重试');
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const token = urlParams.get('token'); // 检查URL中是否直接包含token
+    const error = urlParams.get('error'); // 检查URL是否包含错误信息
+    
+    // 在控制台输出当前URL
+    console.log('当前URL:', window.location.href, '是否是回调路径:', isCallback);
+    
+    // 清除URL中的参数，避免刷新页面时重复处理
+    const shouldClearUrl = code || error || token;
+    
+    // 处理错误信息
+    if (error) {
+      console.error('检测到URL中包含错误信息:', error);
+      const message = urlParams.get('message') || '授权失败';
+      this.$message.error(`GitHub授权失败: ${message}`);
+      
+      // 清除URL中的参数
+      if (shouldClearUrl) {
+        console.log('清除URL中的参数');
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
-    } else {
-      // 检查存储的 token 是否有效
-      const isAuthenticated = await this.checkAuthStatus()
-      if (isAuthenticated) {
-        await this.fetchReleases()
-        // 如果从缓存加载了数据，也要确保获取收藏数
-        if (this.releases.length > 0) {
-          this.fetchRepoStars()
-        }
-
-        // 添加：自动加载足迹数据
-        this.fetchClickLogs(1)
-
-        // 为时间轴时间戳添加点击事件
-        this.$nextTick(() => {
-          this.addTimelineClickHandlers()
-        })
-      }
+      return;
     }
+    
+    // 处理直接token的情况
+    if (token) {
+      console.log('从URL中获取到token，保存并清除URL参数');
+      localStorage.setItem('github_token', token);
+      
+      // 清除URL中的参数
+      if (shouldClearUrl) {
+        console.log('清除URL中的参数');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      
+      this.accessToken = token;
+      
+      // 验证token并加载数据
+      try {
+        const isAuthenticated = await this.checkAuthStatus();
+        if (isAuthenticated) {
+          this.initializeAfterAuth();
+        }
+      } catch (error) {
+        console.error('验证token失败:', error);
+        this.$message.error('登录验证失败，请重试');
+      }
+      return;
+    }
+    
+    // 特别注意: 回调处理由 GitHubLogin 组件处理，这里不再重复处理
+    // 处理GitHub授权回调应该只在一个地方进行，避免多次使用同一个code
+    if (code) {
+      console.log('检测到授权码，将由 GitHubLogin 组件处理，此处不重复处理');
+      return;
+    }
+    
+    // 常规检查存储的token
+    console.log('检查本地存储的token...');
+    try {
+      const isAuthenticated = await this.checkAuthStatus();
+      if (isAuthenticated) {
+        this.initializeAfterAuth();
+      } else {
+        console.log('未登录状态，显示登录页面');
+      }
+    } catch (error) {
+      console.error('检查认证状态时发生错误:', error);
+    }
+  },
+  
+  // 登录成功后的初始化
+  async initializeAfterAuth() {
+    console.log('初始化已登录用户的数据...');
+    
+    // 如果有必要，获取最新数据
+    if (this.releases.length === 0) {
+      await this.fetchReleases();
+    }
+    
+    // 确保获取仓库收藏数
+    if (this.releases.length > 0) {
+      this.fetchRepoStars();
+    }
+    
+    // 加载足迹数据
+    this.fetchClickLogs(1);
+    
+    // 添加时间轴点击事件处理
+    this.$nextTick(() => {
+      this.addTimelineClickHandlers();
+    });
   },
 
   beforeUnmount() {
@@ -1715,7 +1900,7 @@ export default {
     searchScope(newScope) {
       // 当搜索范围变化时，清空搜索框
       this.searchQuery = '';
-      
+
       // 如果切换到全局搜索，将视图模式设置为列表
       if (newScope === 'global') {
         this.viewMode = 'list';
@@ -1802,8 +1987,8 @@ export default {
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: column;  /* 修改为纵向排列 */
+  align-items: flex-start;  /* 左对齐 */
   gap: 15px;
   width: 100%;
   box-sizing: border-box;
@@ -1814,7 +1999,7 @@ export default {
   align-items: center;
   gap: 10px;
   flex: 1;
-  min-width: 300px;
+  width: 100%;  /* 使搜索框占满宽度 */
 }
 
 .search-scope-selector {
@@ -1822,6 +2007,12 @@ export default {
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+  min-width: 150px;  /* 调整最小宽度 */
+  padding: 5px 10px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .search-input {
@@ -1831,21 +2022,60 @@ export default {
 /* 搜索按钮样式 */
 :deep(.el-input-group__append) {
   padding: 0;
-  background-color: #409EFF;
-  border-color: #409EFF;
+  background-color: #2c3e50;
+  border-color: #2c3e50;
+  border-top-right-radius: 20px;
+  border-bottom-right-radius: 20px;
+  overflow: hidden;
 }
 
 :deep(.el-input-group__append .el-button) {
   border: none;
   background: transparent;
-  color: white;
-  padding: 0 15px;
+  color: #ffffff;
+  padding: 0 20px;
   height: 100%;
+  min-width: 100px; /* 确保搜索按钮有足够宽度 */
+  font-weight: 600; /* 加粗文字 */
+  transition: all 0.3s;
+  letter-spacing: 1px; /* 增加字间距 */
 }
 
 :deep(.el-input-group__append .el-button:hover) {
-  background-color: #66b1ff;
-  color: white;
+  background-color: #34495e;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(52, 73, 94, 0.5);
+}
+
+/* 全局搜索按钮特殊样式 */
+:deep(.global-search-btn) {
+  background: linear-gradient(to right, #2c3e50, #4b6cb7);
+  border: none;
+  position: relative;
+  overflow: hidden;
+}
+
+:deep(.global-search-btn:hover) {
+  background: linear-gradient(to right, #34495e, #6384cf);
+  box-shadow: 0 0 15px rgba(75, 108, 183, 0.7);
+  transform: translateY(-1px);
+}
+
+:deep(.global-search-btn:hover::before) {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+  animation: shine 1.5s infinite;
+}
+
+@keyframes shine {
+  100% {
+    left: 100%;
+  }
 }
 
 .view-filter-controls {
@@ -2157,9 +2387,9 @@ export default {
   border-radius: inherit;
 }
 
-/* 确保没有其他加载动画干扰 */
+/* 确保没有其他加载动画干扰，但保留搜索按钮的图标 */
 :deep(.el-button .el-icon) {
-  display: none !important; /* 隐藏所有的 Element 图标 */
+  display: inline-flex !important; /* 显示图标 */
 }
 
 :deep(.el-button.is-loading .el-icon),
@@ -2590,7 +2820,7 @@ h2 {
     align-items: stretch;
     gap: 10px;
   }
-  
+
   .search-scope-selector {
     justify-content: center;
   }
@@ -3868,29 +4098,109 @@ h2 {
   gap: 5px;
 }
 
+/* 搜索工具栏容器 */
+.search-toolbar {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 5px;
+  flex-wrap: nowrap;
+}
+
+.search-input-wrapper {
+  flex: 1;
+  min-width: 0; /* 允许flex子项收缩 */
+}
+
+.controls-and-tips {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  min-width: 300px;
+}
+
 /* 全局搜索提示样式 */
 .global-search-tip {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: #ecf5ff;
-  color: #409eff;
-  padding: 10px 15px;
+  background-color: #f2f6fc;
+  color: #606266;
+  padding: 5px 10px;
   border-radius: 4px;
-  font-size: 14px;
-  margin-top: 10px;
-  border-left: 3px solid #409eff;
+  font-size: 13px;
+  border-left: 3px solid #b3d8ff;
+  white-space: nowrap;
+  margin-left: 10px;
 }
 
 .global-search-tip i {
   font-size: 16px;
 }
 
-/* 在手机端减小内边距 */
+/* 响应式样式调整 */
+@media (max-width: 1200px) {
+  .search-toolbar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .search-input-wrapper {
+    order: 1;
+    width: 100%;
+    flex: none;
+  }
+  
+  .search-scope-selector {
+    order: 0;
+    flex: 0 0 auto;
+  }
+  
+  .controls-and-tips {
+    order: 2;
+    width: 100%;
+    justify-content: flex-end;
+    min-width: auto;
+  }
+  
+  .view-filter-controls {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .controls-and-tips {
+    justify-content: center;
+  }
+  
+  .search-scope-selector {
+    margin: 0 auto;
+  }
+}
+
+/* 在手机端调整提示框样式 */
 @media (max-width: 768px) {
   .global-search-tip {
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 4px 8px;
+    font-size: 12px;
+    margin-left: 5px;
+  }
+  
+  .global-search-tip .tip-icon {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .global-search-tip span {
+    display: none;
+  }
+  
+  .global-search-tip:after {
+    content: "全局";
+    font-size: 12px;
   }
 }
 
@@ -3922,5 +4232,18 @@ h2 {
   width: 16px;
   height: 16px;
   object-fit: contain;
+}
+
+/* 调试助手样式 */
+.debug-helper-container {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+}
+
+.debug-helper-container .el-button {
+  margin-bottom: 10px;
 }
 </style>

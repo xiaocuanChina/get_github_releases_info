@@ -15,23 +15,32 @@ from cachetools import TTLCache
 import json
 import sqlite3
 from pydantic import BaseModel
-
-# 添加代理配置
-PROXY_URL = "http://127.0.0.1:10808"  # 您提供的代理地址
+import urllib.parse
+import secrets
 
 # 加载 .env 文件
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
+# 修改代理配置为可选的
+# 添加代理配置
+PROXY_URL = os.getenv("PROXY_URL", None)  # 将代理地址改为可选环境变量
+print(f"代理配置: {PROXY_URL if PROXY_URL else '未使用代理'}")
+
+# 定义前端URL和CORS设置
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:8080")
+print(f"前端URL: {FRONTEND_BASE_URL}")
+
 app = FastAPI()
 
-# 配置 CORS
+# 配置 CORS - 确保允许所有来源，特别是前端域名
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 修改这里，暂时允许所有源进行测试
+    allow_origins=["*"],  # 允许所有来源，解决CORS问题
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # 暴露所有响应头
 )
 
 # GitHub OAuth 配置
@@ -40,7 +49,8 @@ GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     raise ValueError("GitHub OAuth credentials not found in environment variables")
 
-GITHUB_REDIRECT_URI = "http://localhost:8080/auth/callback"
+# 重定向URI，必须与GitHub OAuth应用中配置的一致
+GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", f"{FRONTEND_BASE_URL}/auth/callback")
 
 ttl_time_minute = 60
 # 在全局添加缓存
@@ -92,9 +102,13 @@ async def fetch_repo_info(session: aiohttp.ClientSession, repo_name: str, access
         "Accept": "application/vnd.github.v3+json"
     }
 
+    request_kwargs = {}
+    if PROXY_URL:
+        request_kwargs["proxy"] = PROXY_URL
+
     try:
-        # 使用代理发送请求
-        async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
+        # 使用代理发送请求（如果配置了）
+        async with session.get(url, headers=headers, **request_kwargs) as response:
             if response.status == 200:
                 repo_data = await response.json()
                 return {
@@ -118,9 +132,13 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
         "Accept": "application/vnd.github.v3+json"
     }
 
+    request_kwargs = {}
+    if PROXY_URL:
+        request_kwargs["proxy"] = PROXY_URL
+
     try:
-        # 使用代理
-        async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
+        # 使用代理（如果配置了）
+        async with session.get(url, headers=headers, **request_kwargs) as response:
             if response.status == 200:
                 releases = await response.json()
                 if releases:
@@ -206,91 +224,168 @@ async def create_client_session():
 @app.get("/api/auth/github")
 async def github_auth():
     """GitHub OAuth 认证入口"""
+    # 添加调试信息
+    print(f"开始GitHub OAuth认证流程")
+    print(f"CLIENT_ID: {GITHUB_CLIENT_ID[:5]}...")
+    print(f"重定向URI: {GITHUB_REDIRECT_URI}")
+    
+    # 生成随机state用于防止CSRF攻击
+    state = secrets.token_hex(16)
+    
+    # 构建GitHub OAuth授权URL, 添加state参数
     auth_url = (
         f"https://github.com/login/oauth/authorize?"
         f"client_id={GITHUB_CLIENT_ID}&"
-        f"redirect_uri={GITHUB_REDIRECT_URI}&"
-        f"scope=repo read:user user:email"
+        f"redirect_uri={urllib.parse.quote(GITHUB_REDIRECT_URI)}&"  # 确保URI正确编码
+        f"scope=repo read:user user:email&"
+        f"state={state}"
     )
+    print(f"授权URL: {auth_url}, state: {state}")
     # 使用 status_code=302 确保正确的重定向
     return RedirectResponse(url=auth_url, status_code=302)
 
 
 @app.get("/api/auth/callback")
-async def github_callback(code: str):
-    """GitHub OAuth 回调处理"""
+async def github_callback(code: str, state: str = None):
+    """处理 GitHub OAuth 回调，获取访问令牌"""
     try:
-        # 创建带有超时和代理的会话
-        timeout = aiohttp.ClientTimeout(total=30)  # 30秒超时
-        conn = aiohttp.TCPConnector(ssl=ssl.create_default_context(cafile=certifi.where()))
-
-        access_token = None # 初始化 access_token
-
-        async with aiohttp.ClientSession(timeout=timeout, connector=conn) as session:
-            print(f"收到授权码: {code[:5]}...")
-            print(f"使用的回调 URL: {GITHUB_REDIRECT_URI}")
-            print(f"使用代理: {PROXY_URL}")
-
-            token_url = "https://github.com/login/oauth/access_token"
-            headers = {
-                "Accept": "application/json",
-                "User-Agent": "GitHub-Starred-Releases-App"
-            }
-            data = {
+        print(f"收到 GitHub 回调，验证码长度: {len(code)}，前5位: {code[:5]}...")
+        print(f"收到 state 参数: {state}")
+        print(f"重定向URI: {GITHUB_REDIRECT_URI}")
+        print(f"CLIENT_ID: {GITHUB_CLIENT_ID[:5]}...")
+        
+        # 创建自定义会话
+        session = await create_client_session()
+        
+        try:
+            # 交换代码获取访问令牌
+            payload = {
                 "client_id": GITHUB_CLIENT_ID,
                 "client_secret": GITHUB_CLIENT_SECRET,
                 "code": code,
-                "redirect_uri": GITHUB_REDIRECT_URI
+                "redirect_uri": GITHUB_REDIRECT_URI,
+                "state": state  # 包含state参数
             }
-
-            # 尝试连接 GitHub API，使用代理
-            try:
-                async with session.post(token_url, data=data, headers=headers, proxy=PROXY_URL) as response:
-                    response_text = await response.text()
-                    print(f"GitHub OAuth 响应状态码: {response.status}")
-                    print(f"GitHub OAuth 响应内容: {response_text}")
-
-                    if response.status != 200:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=f"GitHub OAuth 错误: {response_text}"
-                        )
-
-                    try:
-                        token_data = json.loads(response_text)
-                    except json.JSONDecodeError:
-                        raise HTTPException(
-                            status_code=500,
-                            detail="无法解析 GitHub 响应"
-                        )
-
-                    if "error" in token_data:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"GitHub OAuth 错误: {token_data.get('error_description', token_data['error'])}"
-                        )
-
-                    access_token = token_data.get("access_token")
-                    if not access_token:
-                        raise HTTPException(
-                            status_code=400,
-                            detail="未能获取访问令牌"
-                        )
-
-                    return {"access_token": access_token}
-            except aiohttp.ClientConnectorError as e:
-                print(f"连接到 GitHub API 失败: {str(e)}")
-                raise HTTPException(
-                    status_code=503,
-                    detail=f"无法连接到 GitHub 服务器: {str(e)}"
-                )
-
-    except aiohttp.ClientError as e:
-        print(f"网络请求错误: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Network error: {str(e)}")
+            headers = {
+                "Accept": "application/json",
+                "User-Agent": "GitHub-Starred-Releases-App",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            
+            print(f"开始向GitHub交换访问令牌... 使用code: {code[:5]}...")
+            
+            # 请求参数，根据是否存在代理来设置
+            request_kwargs = {}
+            if PROXY_URL:
+                request_kwargs["proxy"] = PROXY_URL
+            
+            # 使用代理提交表单数据
+            async with session.post(
+                "https://github.com/login/oauth/access_token",
+                data=payload,
+                headers=headers,
+                **request_kwargs  # 使用动态参数
+            ) as response:
+                response_text = await response.text()
+                print(f"GitHub OAuth响应状态码: {response.status}")
+                
+                if response.status != 200:
+                    print(f"GitHub授权失败, 状态码: {response.status}, 响应: {response_text}")
+                    return {
+                        "status": "error",
+                        "error": f"GitHub API返回错误 (状态码: {response.status}): {response_text}",
+                        "redirect_url": f"{FRONTEND_BASE_URL}?error=github_api_error"
+                    }
+                
+                # 首先尝试JSON解析
+                try:
+                    resp_data = json.loads(response_text)
+                    print(f"GitHub OAuth响应内容类型: JSON")
+                except json.JSONDecodeError:
+                    # 如果解析JSON失败，尝试解析URL编码的表单响应
+                    print("无法解析为JSON，尝试解析为表单响应")
+                    resp_data = {}
+                    for pair in response_text.split('&'):
+                        if '=' in pair:
+                            key, value = pair.split('=', 1)
+                            resp_data[key] = value
+                    print(f"解析为表单数据: {resp_data.keys()}")
+                
+                # 检查是否有错误
+                if "error" in resp_data:
+                    error_msg = resp_data.get("error_description", resp_data.get("error", "Unknown error"))
+                    print(f"GitHub授权错误: {error_msg}")
+                    
+                    # 如果是重复使用验证码的错误，给出更明确的提示
+                    if "bad_verification_code" in resp_data.get("error", ""):
+                        error_msg = "验证码无效或已过期。GitHub的验证码只能使用一次，且有效期很短。请重新进行授权流程。"
+                        print(f"详细错误原因: {error_msg}")
+                    
+                    # 直接返回JSON响应而不是重定向，以解决CORS问题
+                    return {
+                        "status": "error",
+                        "error": error_msg,
+                        "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(error_msg)}"
+                    }
+                
+                # 获取访问令牌
+                access_token = resp_data.get("access_token")
+                if not access_token:
+                    print("GitHub返回的响应中没有访问令牌")
+                    
+                    # 直接返回JSON响应而不是重定向
+                    return {
+                        "status": "error",
+                        "error": "没有获取到访问令牌",
+                        "redirect_url": f"{FRONTEND_BASE_URL}?error=no_access_token"
+                    }
+                
+                # 验证获取到的令牌是否有效
+                print(f"获取到访问令牌: {access_token[:5]}...")
+                user_data = await get_user_info_from_token(session, access_token)
+                
+                if not user_data or "login" not in user_data:
+                    print("无法使用获取的令牌获取用户信息，可能是令牌无效")
+                    
+                    # 直接返回JSON响应而不是重定向
+                    return {
+                        "status": "error",
+                        "error": "令牌验证失败",
+                        "redirect_url": f"{FRONTEND_BASE_URL}?error=invalid_token"
+                    }
+                
+                user_login = user_data["login"]
+                print(f"用户 {user_login} 授权成功, 已获取访问令牌")
+                
+                # 成功后返回JSON响应而不是重定向
+                return {
+                    "status": "success",
+                    "access_token": access_token,
+                    "user": user_data,
+                    "redirect_url": f"{FRONTEND_BASE_URL}?access_token={access_token}"
+                }
+            
+        finally:
+            # 确保关闭会话
+            await session.close()
+    
+    except HTTPException as http_ex:
+        # 将HTTP异常转换为JSON响应
+        print(f"GitHub授权HTTP异常: {http_ex.detail}")
+        return {
+            "status": "error",
+            "error": str(http_ex.detail),
+            "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(str(http_ex.detail))}"
+        }
     except Exception as e:
-        print(f"GitHub 认证回调失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"GitHub授权回调处理异常: {str(e)}")
+        
+        # 直接返回JSON响应而不是重定向
+        return {
+            "status": "error",
+            "error": str(e),
+            "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(str(e))}"
+        }
 
 
 @app.get("/api/starred-releases")
@@ -397,23 +492,31 @@ async def verify_token(request: Request):
     """验证 token 是否有效并返回用户信息"""
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
+        print("Token验证失败: 缺少或无效的授权头")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
     access_token = auth_header.split(" ")[1]
     try:
         async with aiohttp.ClientSession() as session:
-            # 获取用户信息，使用代理
+            # 请求参数，根据是否存在代理来设置
+            request_kwargs = {}
+            if PROXY_URL:
+                request_kwargs["proxy"] = PROXY_URL
+            
+            # 获取用户信息，使用代理（如果配置了）
             async with session.get(
                     "https://api.github.com/user",
                     headers={
                         "Authorization": f"Bearer {access_token}",
-                        "Accept": "application/vnd.github.v3+json"
+                        "Accept": "application/vnd.github.v3+json",
+                        "User-Agent": "GitHub-Starred-Releases-App"
                     },
-                    proxy=PROXY_URL
+                    **request_kwargs
             ) as response:
                 if response.status == 200:
                     user_data = await response.json()
                     user_login = user_data["login"]
+                    print(f"用户 {user_login} 的Token验证成功")
 
                     # --- 修改：查询最后活动时间 ---
                     last_activity_time = get_user_last_activity(user_login)
@@ -430,8 +533,14 @@ async def verify_token(request: Request):
                     }
                     # --- 结束修改 ---
                 else:
-                    raise HTTPException(status_code=401, detail="Invalid token")
+                    response_text = await response.text()
+                    print(f"Token验证失败，状态码: {response.status}, 响应: {response_text}")
+                    raise HTTPException(status_code=401, detail=f"Invalid token. GitHub API returned: {response.status}")
+    except aiohttp.ClientConnectorError as e:
+        print(f"连接到GitHub API失败: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Connection error: {str(e)}")
     except Exception as e:
+        print(f"Token验证过程中发生异常: {str(e)}")
         raise HTTPException(status_code=401, detail=str(e))
 
 
@@ -464,13 +573,18 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                 page = 1
                 while True:
                     starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
+                    # 请求参数
+                    request_kwargs = {}
+                    if PROXY_URL:
+                        request_kwargs["proxy"] = PROXY_URL
+                    
                     async with session.get(
                             starred_url,
                             headers={
                                 "Authorization": f"Bearer {token}",
                                 "Accept": "application/vnd.github.v3+json"
                             },
-                            proxy=PROXY_URL  # 添加代理
+                            **request_kwargs
                     ) as response:
                         if response.status != 200:
                             break
@@ -566,34 +680,68 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
 async def get_user_info_from_token(session: aiohttp.ClientSession, access_token: str) -> Dict | None:
     """根据 token 获取 GitHub 用户基本信息"""
     try:
+        print(f"开始获取用户信息, token: {access_token[:5]}...")
+        
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "User-Agent": "GitHub-Starred-Releases-App"
+        }
+        
+        # 使用代理（如果可用）
+        request_kwargs = {}
+        if PROXY_URL:
+            request_kwargs["proxy"] = PROXY_URL
+        
         async with session.get(
                 "https://api.github.com/user",
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/vnd.github.v3+json",
-                    "User-Agent": "GitHub-Starred-Releases-App"
-                },
-                proxy=PROXY_URL
+                headers=headers,
+                **request_kwargs
         ) as response:
+            response_text = await response.text()
+            print(f"获取用户信息响应状态码: {response.status}")
+            
             if response.status == 200:
-                user_data = await response.json()
-                return user_data # 返回整个用户信息字典
+                try:
+                    user_data = json.loads(response_text)
+                    print(f"成功获取用户信息: {user_data.get('login')}")
+                    return user_data # 返回整个用户信息字典
+                except json.JSONDecodeError:
+                    print(f"解析用户信息JSON失败: {response_text}")
+                    return None
             else:
-                print(f"获取用户信息失败，状态码: {response.status}")
+                print(f"获取用户信息失败，状态码: {response.status}, 响应: {response_text}")
                 return None
+    except aiohttp.ClientConnectorError as e:
+        print(f"连接到GitHub API失败: {str(e)}")
+        return None
     except Exception as e:
         print(f"获取用户信息时发生错误: {e}")
         return None
 
 async def get_user_login_from_token(access_token: str) -> str | None:
     """辅助函数：根据 token 获取用户登录名"""
-    # create_client_session() 会创建一个新的会话
-    # 如果您希望在应用级别重用会话，请考虑不同的会话管理策略
-    async with await create_client_session() as session:
-        user_data = await get_user_info_from_token(session, access_token)
-        if user_data and "login" in user_data:
-            return user_data["login"]
-    return None
+    if not access_token:
+        print("尝试获取用户信息时没有提供访问令牌")
+        return None
+    
+    try:
+        # 使用自定义创建的会话
+        session = await create_client_session()
+        
+        try:
+            user_data = await get_user_info_from_token(session, access_token)
+            if user_data and "login" in user_data:
+                return user_data["login"]
+            else:
+                print("获取到的用户数据没有login字段")
+                return None
+        finally:
+            # 确保会话最终被关闭
+            await session.close()
+    except Exception as e:
+        print(f"获取用户登录名过程中发生异常: {str(e)}")
+        return None
 
 def get_user_last_activity(login: str) -> str | None:
     """从数据库获取用户的最后一次点击时间（作为最后活动时间）"""
@@ -769,13 +917,18 @@ async def update_rss_links_for_user(user_login, access_token):
             page = 1
             while True:
                 starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
+                # 请求参数
+                request_kwargs = {}
+                if PROXY_URL:
+                    request_kwargs["proxy"] = PROXY_URL
+                
                 async with session.get(
                         starred_url,
                         headers={
                             "Authorization": f"Bearer {access_token}",
                             "Accept": "application/vnd.github.v3+json"
                         },
-                        proxy=PROXY_URL
+                        **request_kwargs
                 ) as response:
                     if response.status != 200:
                         break
@@ -921,8 +1074,13 @@ async def get_repo_stars(request: Request, repos: str = Query(None)):
                     "User-Agent": "GitHub-Starred-Releases-App"
                 }
                 
+                # 请求参数，根据是否存在代理来设置
+                request_kwargs = {}
+                if PROXY_URL:
+                    request_kwargs["proxy"] = PROXY_URL
+                
                 try:
-                    async with session.get(url, headers=headers, proxy=PROXY_URL) as response:
+                    async with session.get(url, headers=headers, **request_kwargs) as response:
                         if response.status == 200:
                             repo_data = await response.json()
                             return {
@@ -982,13 +1140,18 @@ async def check_rss_updates(request: Request):
             page = 1
             while True:
                 starred_url = f"https://api.github.com/user/starred?per_page=100&page={page}"
+                # 请求参数
+                request_kwargs = {}
+                if PROXY_URL:
+                    request_kwargs["proxy"] = PROXY_URL
+                    
                 async with session.get(
                         starred_url,
                         headers={
                             "Authorization": f"Bearer {access_token}",
                             "Accept": "application/vnd.github.v3+json"
                         },
-                        proxy=PROXY_URL
+                        **request_kwargs
                 ) as response:
                     if response.status != 200:
                         break

@@ -8,5 +8,13 @@ module.exports = defineConfig({
         args[0].title = '获取最新Releases列表'
         return args
       })
+  },
+  publicPath: '/',
+  devServer: {
+    historyApiFallback: {
+      rewrites: [
+        { from: /^\/auth\/callback/, to: '/index.html' }
+      ]
+    }
   }
 })

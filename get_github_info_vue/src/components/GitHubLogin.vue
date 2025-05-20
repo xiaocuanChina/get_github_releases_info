@@ -75,6 +75,7 @@
 <script>
 import GitHubLogo from '@/components/GitHubLogo.vue'
 import { API_ENDPOINTS } from '@/api/config'
+import axios from 'axios'
 
 export default {
   name: 'GitHubLogin',
@@ -83,9 +84,85 @@ export default {
     GitHubLogo
   },
   
+  data() {
+    return {
+      isCheckingToken: false,
+      loginFailed: false,
+      errorMessage: ''
+    }
+  },
+  
+  mounted() {
+    // 检查URL参数中是否有code、token或error
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const tokenFromUrl = urlParams.get('token');
+    const errorFromUrl = urlParams.get('error');
+    const messageFromUrl = urlParams.get('message');
+    
+    console.log('URL参数检查 - code:', code ? '存在' : '不存在', 'token:', tokenFromUrl ? '存在' : '不存在');
+    
+    if (code) {
+      // 如果URL中有授权码，处理GitHub回调
+      this.handleGitHubCallback(code);
+      return;
+    } else if (tokenFromUrl) {
+      console.log('从URL接收到token');
+      localStorage.setItem('github_token', tokenFromUrl);
+      // 清除URL中的参数
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // 刷新页面以应用新token
+      window.location.reload();
+      return;
+    } else if (errorFromUrl) {
+      this.loginFailed = true;
+      this.errorMessage = messageFromUrl || '登录失败，请重试';
+      console.error('登录错误:', this.errorMessage);
+      this.$message.error(this.errorMessage);
+      return;
+    }
+    
+    // 检查是否已有本地存储的token
+    this.checkExistingToken();
+  },
+  
   methods: {
+    async checkExistingToken() {
+      const storedToken = localStorage.getItem('github_token');
+      if (storedToken) {
+        this.isCheckingToken = true;
+        
+        try {
+          console.log('检查存储的token...');
+          const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
+            headers: {
+              Authorization: `Bearer ${storedToken}`
+            }
+          });
+          
+          if (response.data.status === 'success') {
+            console.log('已验证本地存储的token有效');
+            this.$emit('auth-success', {
+              token: storedToken,
+              user: response.data.user
+            });
+            return;
+          }
+        } catch (error) {
+          console.error('验证已存储token失败:', error);
+          // 清除无效token
+          localStorage.removeItem('github_token');
+        } finally {
+          this.isCheckingToken = false;
+        }
+      }
+    },
+    
     handleLogin() {
       try {
+        // 保存当前的URL，用于登录后重定向回来
+        localStorage.setItem('redirect_after_login', window.location.href);
+        
         // 显示加载中提示
         this.$message({
           message: '正在跳转到GitHub授权页面...',
@@ -100,6 +177,119 @@ export default {
       } catch (error) {
         console.error('跳转到GitHub授权页面失败:', error);
         this.$message.error('无法跳转到GitHub授权页面，请检查网络连接');
+      }
+    },
+    
+    // 用于处理GitHub回调的方法
+    async handleGitHubCallback(code) {
+      console.log('处理GitHub回调，授权码:', code.substring(0, 5) + '...');
+      
+      try {
+        // 先清除URL中的code参数
+        console.log('清除URL中的code参数');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // 显示加载提示
+        this.$message({
+          message: '正在处理GitHub授权...',
+          type: 'info',
+          duration: 5000
+        });
+        
+        console.log('向后端发送请求，URL:', `${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`);
+        
+        // 向后端发送授权码获取token
+        const response = await axios.get(`${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`, {
+          // 添加超时设置
+          timeout: 30000,
+          // 增加重试配置
+          retry: 3,
+          retryDelay: 1000,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        console.log('认证响应状态:', response.status);
+        console.log('认证响应数据:', JSON.stringify(response.data).substring(0, 100) + '...');
+        
+        if (response.data && response.data.access_token) {
+          // 保存token
+          const token = response.data.access_token;
+          localStorage.setItem('github_token', token);
+          console.log('成功获取并保存token');
+          
+          // 验证token
+          try {
+            console.log('验证令牌有效性...');
+            const verifyResponse = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
+              headers: {
+                Authorization: `Bearer ${token}`
+              },
+              // 添加超时设置
+              timeout: 20000
+            });
+            
+            if (verifyResponse.data.status === 'success') {
+              console.log('令牌验证成功');
+              this.$emit('auth-success', {
+                token: token,
+                user: verifyResponse.data.user
+              });
+              
+              // 检查是否有需要重定向的URL
+              const redirectUrl = localStorage.getItem('redirect_after_login');
+              if (redirectUrl) {
+                localStorage.removeItem('redirect_after_login');
+                if (redirectUrl !== window.location.href) {
+                  window.location.href = redirectUrl;
+                  return;
+                }
+              }
+              
+              // 刷新页面以应用新token
+              window.location.reload();
+            } else {
+              throw new Error('令牌验证响应无效');
+            }
+          } catch (verifyError) {
+            console.error('令牌验证失败:', verifyError);
+            this.$message.error('获取令牌成功，但验证失败，请重试');
+            localStorage.removeItem('github_token');
+          }
+        } else if (response.data && response.data.status === 'error') {
+          // 处理错误响应
+          console.error('GitHub授权返回错误:', response.data.error);
+          throw new Error(response.data.error || '授权失败');
+        } else {
+          console.error('响应中没有访问令牌:', response.data);
+          throw new Error(response.data?.detail || '响应中没有访问令牌');
+        }
+      } catch (error) {
+        console.error('处理GitHub回调失败:', error);
+        this.loginFailed = true;
+        
+        let errorMessage = '认证失败，请重试';
+        if (error.response?.data?.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
+        this.errorMessage = errorMessage;
+        console.error('详细错误信息:', errorMessage);
+        
+        // 显示友好的错误信息
+        if (errorMessage.includes('code') && errorMessage.includes('incorrect or expired')) {
+          this.$message.error('授权码已过期或无效，请重新登录');
+        } else if (errorMessage.includes('验证码无效或已过期')) {
+          this.$message.error('授权码已过期或无效，请重新登录');
+        } else if (errorMessage.includes('Failed to get user information')) {
+          this.$message.error('无法获取用户信息，请重试');
+        } else {
+          this.$message.error(`GitHub授权失败: ${errorMessage}`);
+        }
       }
     }
   }

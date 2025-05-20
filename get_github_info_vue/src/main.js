@@ -12,6 +12,31 @@ Vue.config.productionTip = false
 // 设置网页标题
 document.title = '获取最新Releases列表'
 
+// 添加GitHub回调处理逻辑
+const handleGitHubCallback = () => {
+  // 检查当前路径是否是GitHub回调路径
+  if (window.location.pathname.startsWith('/auth/callback')) {
+    console.log('检测到GitHub回调路径，保留查询参数');
+    
+    // 获取当前URL的查询参数
+    const queryParams = window.location.search;
+    const urlParams = new URLSearchParams(queryParams);
+    const code = urlParams.get('code');
+    
+    if (code) {
+      console.log('检测到授权码，重定向到首页并保留code参数');
+      // 重定向到首页，但保留查询参数
+      window.history.replaceState({}, document.title, '/' + queryParams);
+    } else {
+      console.log('未检测到有效的授权码，直接返回首页');
+      window.history.replaceState({}, document.title, '/');
+    }
+  }
+};
+
+// 在页面加载时处理可能的GitHub回调
+handleGitHubCallback();
+
 // 添加图标尺寸样式到document
 const style = document.createElement('style')
 style.textContent = `

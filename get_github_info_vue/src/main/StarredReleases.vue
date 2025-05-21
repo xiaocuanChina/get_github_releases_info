@@ -75,49 +75,53 @@
       <div class="search-controls-container">
         <!-- 这个区域已移到搜索工具栏中，这里不再需要 -->
 
-        <!-- 搜索控制工具栏 -->
-        <div class="search-toolbar">
-          <!-- 左侧：搜索范围选择 -->
-          <div class="search-scope-selector">
-            <div class="control-label">搜索范围：</div>
-            <div class="view-controls">
-              <el-tooltip content="在已收藏的仓库中搜索" placement="top">
-                <div class="icon-button" :class="{ active: searchScope === 'starred' }" @click="searchScope = 'starred'">
-                  <i class="el-icon-star-off"></i>
-                </div>
-              </el-tooltip>
-              <el-tooltip content="在全局GitHub中搜索" placement="top">
-                <div class="icon-button" :class="{ active: searchScope === 'global' }" @click="searchScope = 'global'">
-                  <i class="el-icon-place"></i>
-                </div>
-              </el-tooltip>
+        <!-- 搜索控制工具栏 - 使用Element UI布局组件，更紧凑的布局 -->
+        <el-row class="search-toolbar" :gutter="10">
+          <!-- 左侧：搜索范围选择 (固定宽度) -->
+          <el-col :xs="24" :sm="4" :md="3" :lg="2" :xl="2">
+            <div class="search-scope-selector">
+              <div class="control-label">范围</div>
+              <div class="view-controls">
+                <el-tooltip content="在已收藏的仓库中搜索" placement="top">
+                  <div class="icon-button" :class="{ active: searchScope === 'starred' }" @click="searchScope = 'starred'">
+                    <i class="el-icon-star-off"></i>
+                  </div>
+                </el-tooltip>
+                <el-tooltip content="在全局GitHub中搜索" placement="top">
+                  <div class="icon-button" :class="{ active: searchScope === 'global' }" @click="searchScope = 'global'">
+                    <i class="el-icon-place"></i>
+                  </div>
+                </el-tooltip>
+              </div>
             </div>
-          </div>
-          
-          <!-- 中间：搜索框 -->
-          <div class="search-input-wrapper">
-            <el-input
-                v-model="searchQuery"
-                :placeholder="searchScope === 'starred' ? '搜索仓库...' : '在GitHub中搜索...'"
-                prefix-icon="el-icon-search"
-                clearable
-                class="search-input"
-                @keyup="handleSearchKeyPress"
-            >
-              <!-- 全局搜索按钮 -->
-              <template v-if="searchScope === 'global'" #append>
-                <el-button @click="handleGlobalSearch" icon="el-icon-search" class="global-search-btn">搜索</el-button>
-              </template>
-            </el-input>
-          </div>
-          
-          <!-- 右侧：控制栏和提示 -->
-          <div class="controls-and-tips">
-            <!-- 控件区域 -->
+          </el-col>
+
+          <!-- 中间：搜索框 (固定比例) -->
+          <el-col :xs="24" :sm="12" :md="13" :lg="13" :xl="13">
+            <div class="search-input-wrapper">
+              <el-input
+                  v-model="searchQuery"
+                  :placeholder="searchScope === 'starred' ? '搜索仓库...' : '在GitHub中搜索...'"
+                  prefix-icon="el-icon-search"
+                  clearable
+                  class="search-input"
+                  @keyup="handleSearchKeyPress"
+              >
+                <!-- 内嵌全局搜索按钮，使用文字按钮 -->
+                <template v-if="searchScope === 'global'" #suffix>
+                  <div class="search-button global-search-button" @click="handleGlobalSearch">搜索</div>
+                </template>
+              </el-input>
+            </div>
+          </el-col>
+
+          <!-- 右侧：控制栏和提示 (固定比例) -->
+          <el-col :xs="24" :sm="8" :md="8" :lg="9" :xl="9">
+            <!-- 控件区域 - 收藏模式下显示 -->
             <div v-if="searchScope === 'starred'" class="controls-container">
               <div class="view-filter-controls">
                 <div class="control-group">
-                  <div class="control-label">视图：</div>
+                  <div class="control-label">视图</div>
                   <div class="view-controls">
                     <el-tooltip content="列表视图" placement="top">
                       <div class="icon-button" :class="{ active: viewMode === 'list' }" @click="viewMode = 'list'">
@@ -133,7 +137,7 @@
                 </div>
 
                 <div class="control-group">
-                  <div class="control-label">内容：</div>
+                  <div class="control-label">内容</div>
                   <div class="filter-controls">
                     <el-tooltip content="显示全部" placement="top">
                       <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
@@ -154,7 +158,7 @@
                 </div>
 
                 <div class="control-group">
-                  <div class="control-label">版本：</div>
+                  <div class="control-label">版本</div>
                   <div class="filter-controls">
                     <el-tooltip content="显示全部" placement="top">
                       <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
@@ -175,14 +179,14 @@
                 </div>
               </div>
             </div>
-            
-            <!-- 全局搜索模式提示 -->
+
+            <!-- 全局搜索模式提示 - 全局搜索模式下显示 -->
             <div v-if="searchScope === 'global'" class="global-search-tip">
               <img src="/global_search.png" class="tip-icon" alt="全局搜索" />
               <span>在GitHub上搜索</span>
             </div>
-          </div>
-        </div>
+          </el-col>
+        </el-row>
 
       </div>
 
@@ -543,6 +547,7 @@
 </template>
 
 <script>
+/* eslint-disable */
 import axios from 'axios'
 import {format, isToday, isWeekend, isSameMonth, parseISO} from 'date-fns'
 import {marked} from 'marked'
@@ -707,11 +712,11 @@ export default {
       this.isAuthenticated = true;
       this.userInfo = authData.user;
       this.lastActivityTime = authData.user.last_activity_time;
-      
+
       // 获取数据
       this.fetchReleases();
     },
-    
+
     async fetchUserInfo() {
       try {
         const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY.replace('/verify', '/user'), {
@@ -759,7 +764,7 @@ export default {
         this.isAuthenticated = false;
         return false;
       }
-      
+
       try {
         console.log('开始验证token有效性...');
         const response = await axios.get(API_ENDPOINTS.AUTH_VERIFY, {
@@ -805,7 +810,7 @@ export default {
         }
       } catch (error) {
         console.error('Token验证失败:', error);
-        
+
         // 判断是否为401错误
         if (error.response && error.response.status === 401) {
           this.handleInvalidToken();
@@ -826,7 +831,7 @@ export default {
       }
       return false;
     },
-    
+
     // 处理无效token的情况
     handleInvalidToken() {
       console.log('token无效，清除登录状态');
@@ -835,7 +840,7 @@ export default {
       this.isAuthenticated = false;
       this.accessToken = null;
       this.userInfo = null;
-      
+
       this.$message({
         type: 'warning',
         message: 'GitHub授权已失效，请重新登录',
@@ -847,20 +852,20 @@ export default {
       try {
         console.log('向后端发送授权码，获取访问令牌...');
         const response = await axios.get(`${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`);
-        
+
         console.log('接收到后端响应:', response.data);
-        
+
         // 检查新的响应格式
         if (response.data.status === 'success' && response.data.access_token) {
           // 成功获取token
           const accessToken = response.data.access_token;
-          
+
           // 保存token
           this.accessToken = accessToken;
           this.isAuthenticated = true;
           localStorage.setItem('github_token', this.accessToken);
           console.log('成功获取访问令牌并保存');
-          
+
           // 如果响应中包含用户信息，直接使用
           if (response.data.user) {
             this.userInfo = response.data.user;
@@ -869,7 +874,7 @@ export default {
             // 否则获取用户信息
             await this.fetchUserInfo();
           }
-          
+
           // 如果有保存的重定向地址，则跳转回去
           const redirectUrl = localStorage.getItem('redirect_after_login');
           if (redirectUrl) {
@@ -878,28 +883,28 @@ export default {
             window.location.href = redirectUrl;
             return; // 中断后续操作，因为页面将重定向
           }
-          
+
           return true; // 回调处理成功
         } else if (response.data.status === 'error') {
           // 处理错误响应
           const errorMsg = response.data.error || '授权失败';
           console.error('GitHub授权失败:', errorMsg);
-          
+
           // 显示错误信息
           this.$message.error(`GitHub授权失败: ${errorMsg}`);
-          
+
           // 清除token
           this.error = 'GitHub 认证失败';
           this.isAuthenticated = false;
           localStorage.removeItem('github_token');
-          
+
           throw new Error(errorMsg);
         } else {
           // 旧格式或意外响应格式
           if (!response.data.access_token) {
             throw new Error('后端未返回访问令牌');
           }
-          
+
           // 保存token (旧格式)
           this.accessToken = response.data.access_token;
           this.isAuthenticated = true;
@@ -908,7 +913,7 @@ export default {
 
           // 获取用户信息
           await this.fetchUserInfo();
-          
+
           // 如果有保存的重定向地址，则跳转回去
           const redirectUrl = localStorage.getItem('redirect_after_login');
           if (redirectUrl) {
@@ -917,20 +922,20 @@ export default {
             window.location.href = redirectUrl;
             return; // 中断后续操作，因为页面将重定向
           }
-          
+
           return true; // 回调处理成功
         }
       } catch (error) {
         console.error('GitHub授权回调处理失败:', error);
-        
+
         // 显示错误信息
         this.$message.error(error.response?.data?.detail || error.message || 'GitHub 授权失败，请重试');
-        
+
         // 清除任何可能保存的token
         this.error = 'GitHub 认证失败';
         this.isAuthenticated = false;
         localStorage.removeItem('github_token');
-        
+
         throw error; // 抛出异常以便调用者知道处理失败
       }
     },
@@ -1765,28 +1770,28 @@ export default {
 
   async mounted() {
     console.log('组件挂载，开始初始化...');
-    
+
     // 检查当前路径是否是auth/callback
     const isCallback = window.location.pathname.includes('/auth/callback');
-    
+
     // 检查 URL 中是否有认证码
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const token = urlParams.get('token'); // 检查URL中是否直接包含token
     const error = urlParams.get('error'); // 检查URL是否包含错误信息
-    
+
     // 在控制台输出当前URL
     console.log('当前URL:', window.location.href, '是否是回调路径:', isCallback);
-    
+
     // 清除URL中的参数，避免刷新页面时重复处理
     const shouldClearUrl = code || error || token;
-    
+
     // 处理错误信息
     if (error) {
       console.error('检测到URL中包含错误信息:', error);
       const message = urlParams.get('message') || '授权失败';
       this.$message.error(`GitHub授权失败: ${message}`);
-      
+
       // 清除URL中的参数
       if (shouldClearUrl) {
         console.log('清除URL中的参数');
@@ -1794,20 +1799,20 @@ export default {
       }
       return;
     }
-    
+
     // 处理直接token的情况
     if (token) {
       console.log('从URL中获取到token，保存并清除URL参数');
       localStorage.setItem('github_token', token);
-      
+
       // 清除URL中的参数
       if (shouldClearUrl) {
         console.log('清除URL中的参数');
         window.history.replaceState({}, document.title, window.location.pathname);
       }
-      
+
       this.accessToken = token;
-      
+
       // 验证token并加载数据
       try {
         const isAuthenticated = await this.checkAuthStatus();
@@ -1820,14 +1825,14 @@ export default {
       }
       return;
     }
-    
+
     // 特别注意: 回调处理由 GitHubLogin 组件处理，这里不再重复处理
     // 处理GitHub授权回调应该只在一个地方进行，避免多次使用同一个code
     if (code) {
       console.log('检测到授权码，将由 GitHubLogin 组件处理，此处不重复处理');
       return;
     }
-    
+
     // 常规检查存储的token
     console.log('检查本地存储的token...');
     try {
@@ -1841,24 +1846,24 @@ export default {
       console.error('检查认证状态时发生错误:', error);
     }
   },
-  
+
   // 登录成功后的初始化
   async initializeAfterAuth() {
     console.log('初始化已登录用户的数据...');
-    
+
     // 如果有必要，获取最新数据
     if (this.releases.length === 0) {
       await this.fetchReleases();
     }
-    
+
     // 确保获取仓库收藏数
     if (this.releases.length > 0) {
       this.fetchRepoStars();
     }
-    
+
     // 加载足迹数据
     this.fetchClickLogs(1);
-    
+
     // 添加时间轴点击事件处理
     this.$nextTick(() => {
       this.addTimelineClickHandlers();
@@ -1973,7 +1978,21 @@ export default {
 
 /* 输入框圆角 */
 :deep(.el-input__inner) {
-  border-radius: 20px;
+  border-radius: 20px 0 0 20px !important;
+  border-right: none !important;
+}
+
+/* 修复输入框组样式 */
+:deep(.el-input-group) {
+  display: flex !important;
+  align-items: stretch !important;
+}
+
+:deep(.el-input-group__prepend),
+:deep(.el-input-group__append) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* 搜索区域和控件样式 */
@@ -2005,60 +2024,89 @@ export default {
 .search-scope-selector {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   white-space: nowrap;
-  min-width: 150px;  /* 调整最小宽度 */
-  padding: 5px 10px;
+  min-width: 0; /* 移除最小宽度限制 */
+  padding: 5px 5px;
   background-color: #f5f7fa;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   flex-shrink: 0; /* 防止被压缩 */
+  height: 40px; /* 固定高度与搜索框一致 */
+  box-sizing: border-box;
+  justify-content: center; /* 内容居中 */
 }
 
 .search-input {
   flex: 1;
 }
 
+/* 调整搜索输入框高度 */
+:deep(.search-input .el-input__inner) {
+  height: 44px; /* 增加输入框高度 */
+  line-height: 44px;
+  font-size: 15px; /* 增大字体 */
+}
+
 /* 搜索按钮样式 */
 :deep(.el-input-group__append) {
-  padding: 0;
-  background-color: #2c3e50;
-  border-color: #2c3e50;
-  border-top-right-radius: 20px;
-  border-bottom-right-radius: 20px;
+  padding: 0 !important;
+  background-color: #1890ff !important;
+  border-color: #1890ff !important;
+  border-top-right-radius: 20px !important;
+  border-bottom-right-radius: 20px !important;
   overflow: hidden;
+  margin: 0 !important;
+  height: auto !important;
 }
 
 :deep(.el-input-group__append .el-button) {
-  border: none;
-  background: transparent;
-  color: #ffffff;
-  padding: 0 20px;
-  height: 100%;
+  border: none !important;
+  background: #1890ff !important;
+  color: #ffffff !important; /* 强制使用白色文字 */
+  padding: 0 20px !important;
+  height: 100% !important;
   min-width: 100px; /* 确保搜索按钮有足够宽度 */
   font-weight: 600; /* 加粗文字 */
   transition: all 0.3s;
   letter-spacing: 1px; /* 增加字间距 */
+  box-shadow: none !important;
+  border-radius: 0 20px 20px 0 !important;
 }
 
 :deep(.el-input-group__append .el-button:hover) {
-  background-color: #34495e;
-  color: #ffffff;
-  box-shadow: 0 0 10px rgba(52, 73, 94, 0.5);
+  background-color: #40a9ff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 10px rgba(24, 144, 255, 0.5);
 }
 
 /* 全局搜索按钮特殊样式 */
 :deep(.global-search-btn) {
-  background: linear-gradient(to right, #2c3e50, #4b6cb7);
-  border: none;
+  background: #1890ff !important;
+  border: none !important;
   position: relative;
   overflow: hidden;
+  color: #ffffff !important; /* 强制搜索按钮文字为白色 */
+  font-weight: 600;
+  padding: 0 20px !important;
+  height: 100% !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+  letter-spacing: 1px;
+  border-radius: 0 20px 20px 0 !important;
+  z-index: 10;
+  width: auto !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-width: 80px !important;
 }
 
 :deep(.global-search-btn:hover) {
-  background: linear-gradient(to right, #34495e, #6384cf);
-  box-shadow: 0 0 15px rgba(75, 108, 183, 0.7);
+  background: #40a9ff !important;
+  box-shadow: 0 0 15px rgba(24, 144, 255, 0.5);
   transform: translateY(-1px);
+  color: #ffffff !important;
 }
 
 :deep(.global-search-btn:hover::before) {
@@ -2080,38 +2128,44 @@ export default {
 
 .view-filter-controls {
   display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 10px; /* 增加控件组之间的间距 */
+  flex-wrap: nowrap; /* 防止换行 */
+  justify-content: flex-end;
   align-items: center;
+  height: 44px; /* 匹配搜索区域高度 */
 }
 
 /* 控件组样式 */
 .control-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: 0;
+  margin-right: 12px; /* 增加组之间的距离 */
+  padding: 0 2px; /* 添加水平内边距 */
 }
 
 .control-label {
-  font-size: 14px;
+  font-size: 15px; /* 增大字体 */
+  font-weight: 500; /* 加粗 */
   color: #606266;
   white-space: nowrap;
+  margin-right: 6px; /* 增加右边距 */
 }
 
 /* 视图和筛选控件样式 */
 .view-controls, .filter-controls {
   display: flex;
-  gap: 6px;
+  gap: 4px; /* 增加按钮间距 */
   background-color: #f5f7fa;
   border-radius: 20px;
-  padding: 4px;
+  padding: 3px 6px; /* 增加内边距 */
 }
 
 /* 图标按钮样式 */
 .icon-button {
-  width: 32px;
-  height: 32px;
+  width: 34px; /* 增大按钮尺寸 */
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2120,6 +2174,7 @@ export default {
   transition: all 0.3s;
   background-color: transparent;
   color: #606266;
+  margin: 0 2px; /* 稍微增加水平间距 */
 }
 
 .icon-button:hover {
@@ -2133,7 +2188,7 @@ export default {
 }
 
 .icon-button .el-icon {
-  font-size: 16px;
+  font-size: 18px; /* 增大图标尺寸 */
 }
 
 /* 主内容区域左右布局 */
@@ -3357,6 +3412,25 @@ h2 {
   color: inherit; /* 使用默认颜色 */
 }
 
+/* 明确设置默认按钮文字颜色 */
+:deep(.el-button--default) {
+  color: #606266 !important; /* 默认按钮文字颜色 */
+}
+
+/* 特殊处理搜索按钮 */
+:deep(.global-search-btn),
+:deep(.el-input-group__append .el-button) {
+  color: white !important;
+  font-size: 15px;
+  box-shadow: 0 0 0 rgba(24, 144, 255, 0);
+  transition: all 0.3s ease;
+}
+
+/* 输入框焦点状态 */
+:deep(.el-input.is-focus .el-input__inner) {
+  border-color: #1890ff;
+}
+
 /* 确保加载状态下图标也是白色 */
 :deep(.el-button.is-loading .el-icon) {
   color: white !important;
@@ -4095,30 +4169,35 @@ h2 {
 .search-scope-selector {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px; /* 增加间距 */
+  padding: 5px 10px; /* 增加内边距 */
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  height: 44px; /* 增加高度 */
+  box-sizing: border-box;
+  width: 100%; /* 占满列宽 */
+  justify-content: center; /* 居中 */
 }
 
 /* 搜索工具栏容器 */
 .search-toolbar {
-  display: flex;
   width: 100%;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
   padding: 8px 5px;
-  flex-wrap: nowrap;
+  align-items: center;
+  margin: 0 !important; /* 确保没有额外的外边距 */
 }
 
 .search-input-wrapper {
-  flex: 1;
-  min-width: 0; /* 允许flex子项收缩 */
+  width: 100%; /* 确保宽度占满可用空间 */
 }
 
-.controls-and-tips {
+/* 控件容器样式优化 */
+.controls-container {
+  height: 100%;
   display: flex;
   align-items: center;
-  white-space: nowrap;
-  min-width: 300px;
+  justify-content: flex-end;
 }
 
 /* 全局搜索提示样式 */
@@ -4126,82 +4205,114 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: #f2f6fc;
-  color: #606266;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 13px;
-  border-left: 3px solid #b3d8ff;
+  background-color: #e6f7ff;
+  color: #1d3557;
+  padding: 8px 15px;
+  border-radius: 6px;
+  font-size: 14px;
+  border-left: 3px solid #1890ff;
   white-space: nowrap;
-  margin-left: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  font-weight: 500;
+  width: 100%; /* 使用100%宽度 */
+  height: 100%;
+  box-sizing: border-box;
 }
 
-.global-search-tip i {
-  font-size: 16px;
+.global-search-tip .tip-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0; /* 防止图标被压缩 */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
-/* 响应式样式调整 */
-@media (max-width: 1200px) {
-  .search-toolbar {
-    flex-wrap: wrap;
-    gap: 10px;
+.global-search-tip span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Element布局响应式优化 */
+@media (max-width: 992px) {
+  .search-toolbar .el-col {
+    margin-bottom: 10px;
   }
-  
-  .search-input-wrapper {
-    order: 1;
+
+  .search-scope-selector,
+  .global-search-tip {
     width: 100%;
-    flex: none;
-  }
-  
-  .search-scope-selector {
-    order: 0;
-    flex: 0 0 auto;
-  }
-  
-  .controls-and-tips {
-    order: 2;
-    width: 100%;
-    justify-content: flex-end;
-    min-width: auto;
-  }
-  
-  .view-filter-controls {
-    justify-content: flex-end;
-    flex-wrap: wrap;
+    justify-content: center;
+    margin-left: 0;
   }
 }
 
 @media (max-width: 768px) {
-  .controls-and-tips {
-    justify-content: center;
-  }
-  
   .search-scope-selector {
     margin: 0 auto;
+    justify-content: center;
+  }
+
+  .view-filter-controls {
+    justify-content: center;
+  }
+
+  /* 在小屏幕上隐藏提示文字 */
+  .global-search-tip span {
+    display: none;
+  }
+
+  .global-search-tip::after {
+    content: "全局搜索";
+    font-size: 13px;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #1890ff;
   }
 }
 
 /* 在手机端调整提示框样式 */
 @media (max-width: 768px) {
   .global-search-tip {
-    padding: 4px 8px;
-    font-size: 12px;
-    margin-left: 5px;
+    padding: 6px 10px;
+    font-size: 13px;
+    margin-left: 10px;
+    min-width: 0; /* 在手机上重置最小宽度 */
+    background-color: #e6f7ff; /* 保持亮色背景 */
+    box-shadow: 0 3px 10px rgba(24, 144, 255, 0.15);
+    border-radius: 20px;
+    border: none;
+    border-left: none;
   }
-  
+
   .global-search-tip .tip-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
   }
-  
+
   .global-search-tip span {
     display: none;
   }
-  
+
   .global-search-tip:after {
-    content: "全局";
-    font-size: 12px;
+    content: "全局搜索";
+    font-size: 13px;
+    white-space: nowrap;
+    font-weight: 600; /* 加粗以提高可读性 */
+    letter-spacing: 0.5px;
+    color: #1890ff;
   }
+
+  /* 确保搜索按钮文字在手机上也可见 */
+:deep(.global-search-btn) {
+  min-width: 70px;
+  padding: 0 15px !important;
+  font-size: 14px !important;
+  background: #1890ff !important;
+  color: white !important;
+  border-radius: 0 20px 20px 0 !important;
+}
 }
 
 /* CSS样式添加 */
@@ -4245,5 +4356,170 @@ h2 {
 
 .debug-helper-container .el-button {
   margin-bottom: 10px;
+}
+
+/* 修复搜索组件和分页组件的圆角问题 */
+:deep(.el-input-group) {
+  border-radius: 20px;
+  overflow: visible !important;
+}
+
+:deep(.el-input-group__append) {
+  border-radius: 0 20px 20px 0 !important;
+  overflow: hidden !important;
+}
+
+:deep(.el-pagination button) {
+  border-radius: 30px !important;
+}
+
+:deep(.el-pagination .el-pager li) {
+  border-radius: 30px !important;
+}
+
+:deep(.el-pagination .el-select .el-input) {
+  margin: 0 5px;
+}
+
+:deep(.el-pagination .el-select .el-input .el-input__inner) {
+  border-radius: 20px !important;
+}
+
+:deep(.el-pagination .el-pagination__jump) {
+  margin-left: 10px;
+}
+
+:deep(.el-pagination .el-pagination__jump .el-input__inner) {
+  border-radius: 20px !important;
+}
+
+:deep(.el-pagination .el-pagination__editor.el-input) {
+  width: 50px;
+  margin: 0 5px;
+}
+
+/* 确保搜索按钮圆角完整 */
+:deep(.global-search-btn) {
+  border-radius: 0 20px 20px 0 !important;
+  position: relative;
+  z-index: 1;
+}
+
+/* 确保输入框组样式正确 */
+:deep(.el-input-group__append) {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 修改搜索框样式：两头圆角，搜索按钮在内部 */
+/* 1. 修改输入框样式 */
+:deep(.search-input .el-input__inner) {
+  border-radius: 20px !important; /* 保持整体圆角 */
+  padding-right: 120px !important; /* 为搜索按钮留出更多空间 */
+  border: 1px solid #DCDFE6 !important;
+  transition: all 0.3s;
+  height: 40px; /* 确保输入框有足够高度 */
+  width: 100%; /* 确保搜索框占满可用宽度 */
+}
+
+:deep(.search-input .el-input__inner:focus) {
+  border-color: #409EFF !important;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+}
+
+/* 2. 隐藏原有的按钮容器 */
+:deep(.search-input .el-input-group__append) {
+  display: none !important;
+}
+
+/* 3. 创建覆盖在输入框上的按钮 */
+.search-input-wrapper {
+  position: relative;
+  width: 100%; /* 确保搜索框占满可用宽度 */
+}
+
+/* 内嵌搜索按钮样式 */
+.search-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 18px; /* 增加内边距 */
+  background-color: #409EFF;
+  color: white;
+  font-size: 16px; /* 增大字体 */
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 0 20px 20px 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+/* 全局搜索按钮样式 */
+.global-search-button {
+    padding: 0 30px;
+    border-radius: 20px;
+    right: 1px;
+    top: 51%;
+    transform: translateY(-50%);
+    height: 38px;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(24, 144, 255, 0.4);
+    min-width: 45px;
+    z-index: 3;
+    letter-spacing: 1px;
+}
+
+.global-search-button:hover {
+  background-color: #66b1ff;
+  box-shadow: 0 4px 8px rgba(24, 144, 255, 0.4);
+}
+
+/* 在全局搜索模式下调整搜索输入框样式 */
+/* 移除错误的选择器 */
+
+/* 确保在全局搜索模式下搜索工具栏占据足够空间 */
+.search-toolbar {
+  width: 100%;
+}
+
+/* 改善响应式布局中全局搜索的体验 */
+@media (max-width: 768px) {
+  .global-search-button {
+    min-width: 70px; /* 确保移动端也有足够的按钮宽度 */
+    padding: 0 15px;
+    font-size: 14px;
+  }
+
+  .search-input-wrapper {
+    flex: 1; /* 在响应式布局中确保搜索框占据可用空间 */
+  }
+}
+
+.search-button:hover {
+  background-color: #66b1ff;
+}
+
+.search-button:active {
+  background-color: #3a8ee6;
+}
+
+/* 输入框后缀样式调整 */
+:deep(.el-input__suffix) {
+  right: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  z-index: 2;
+}
+
+/* 清除按钮样式调整 */
+:deep(.el-input__suffix .el-input__icon) {
+  line-height: 1;
+  margin-right: 110px; /* 为搜索按钮留出更多空间 */
 }
 </style>

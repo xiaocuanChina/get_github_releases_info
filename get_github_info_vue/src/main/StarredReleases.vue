@@ -79,19 +79,21 @@
         <el-row class="search-toolbar" :gutter="10">
           <!-- 左侧：搜索范围选择 (固定宽度) -->
           <el-col :xs="24" :sm="4" :md="3" :lg="2" :xl="2">
-            <div class="search-scope-selector">
-              <div class="control-label">范围</div>
-              <div class="view-controls">
-                <el-tooltip content="在已收藏的仓库中搜索" placement="top">
-                  <div class="icon-button" :class="{ active: searchScope === 'starred' }" @click="searchScope = 'starred'">
-                    <i class="el-icon-star-off"></i>
-                  </div>
-                </el-tooltip>
-                <el-tooltip content="在全局GitHub中搜索" placement="top">
-                  <div class="icon-button" :class="{ active: searchScope === 'global' }" @click="searchScope = 'global'">
-                    <i class="el-icon-place"></i>
-                  </div>
-                </el-tooltip>
+            <div class="search-scope-container">
+              <div class="control-group">
+                <div class="control-label">范围</div>
+                <div class="view-controls">
+                  <el-tooltip content="在已收藏的仓库中搜索" placement="top">
+                    <div class="icon-button" :class="{ active: searchScope === 'starred' }" @click="searchScope = 'starred'">
+                      <i class="el-icon-star-off"></i>
+                    </div>
+                  </el-tooltip>
+                  <el-tooltip content="在全局GitHub中搜索" placement="top">
+                    <div class="icon-button" :class="{ active: searchScope === 'global' }" @click="searchScope = 'global'">
+                      <i class="el-icon-place"></i>
+                    </div>
+                  </el-tooltip>
+                </div>
               </div>
             </div>
           </el-col>
@@ -2021,20 +2023,11 @@ export default {
   width: 100%;  /* 使搜索框占满宽度 */
 }
 
-.search-scope-selector {
+.search-scope-container {
   display: flex;
   align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-  min-width: 0; /* 移除最小宽度限制 */
-  padding: 5px 5px;
-  background-color: #f5f7fa;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  flex-shrink: 0; /* 防止被压缩 */
-  height: 40px; /* 固定高度与搜索框一致 */
-  box-sizing: border-box;
-  justify-content: center; /* 内容居中 */
+  height: 44px; /* 匹配搜索区域高度 */
+  justify-content: center;
 }
 
 .search-input {
@@ -4166,19 +4159,7 @@ h2 {
   gap: 10px;
 }
 
-.search-scope-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px; /* 增加间距 */
-  padding: 5px 10px; /* 增加内边距 */
-  background-color: #f5f7fa;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  height: 44px; /* 增加高度 */
-  box-sizing: border-box;
-  width: 100%; /* 占满列宽 */
-  justify-content: center; /* 居中 */
-}
+
 
 /* 搜索工具栏容器 */
 .search-toolbar {
@@ -4240,7 +4221,7 @@ h2 {
     margin-bottom: 10px;
   }
 
-  .search-scope-selector,
+  .search-scope-container,
   .global-search-tip {
     width: 100%;
     justify-content: center;
@@ -4249,7 +4230,7 @@ h2 {
 }
 
 @media (max-width: 768px) {
-  .search-scope-selector {
+  .search-scope-container {
     margin: 0 auto;
     justify-content: center;
   }

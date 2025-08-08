@@ -8,7 +8,7 @@ import os
 from typing import List, Dict
 from dotenv import load_dotenv
 from pathlib import Path
-from starlette.responses import RedirectResponse, StreamingResponse
+from starlette.responses import RedirectResponse, StreamingResponse, FileResponse
 import ssl
 import certifi
 from cachetools import TTLCache
@@ -50,7 +50,7 @@ if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     raise ValueError("GitHub OAuth credentials not found in environment variables")
 
 # 重定向URI，必须与GitHub OAuth应用中配置的一致
-GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", f"{FRONTEND_BASE_URL}/auth/callback")
+GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8080/auth/callback")
 
 ttl_time_minute = 60
 # 在全局添加缓存
@@ -141,14 +141,16 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
         async with session.get(url, headers=headers, **request_kwargs) as response:
             if response.status == 200:
                 releases = await response.json()
+                # 获取仓库基本信息
+                repo_info = await fetch_repo_info(session, repo_name, access_token)
+                
                 if releases:
                     latest_release = releases[0]
-                    # 获取仓库信息
-                    repo_info = await fetch_repo_info(session, repo_name, access_token)
                     result = {
                         "repo_name": repo_name,
                         "avatar_url": repo_info.get("avatar_url"),
                         "description": repo_info.get("description"),
+                        "has_releases": True,
                         "latest_release": {
                             "tag_name": latest_release["tag_name"],
                             "name": latest_release["name"],
@@ -164,7 +166,16 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
                         f"成功获取 {repo_name} 的 release: {latest_release['tag_name']}, 发布时间: {latest_release['published_at']}")
                     return result
                 else:
-                    print(f"{repo_name} 没有 releases")
+                    # 没有releases的仓库也返回基本信息
+                    result = {
+                        "repo_name": repo_name,
+                        "avatar_url": repo_info.get("avatar_url"),
+                        "description": repo_info.get("description"),
+                        "has_releases": False,
+                        "latest_release": None
+                    }
+                    print(f"{repo_name} 没有 releases，但返回基本信息")
+                    return result
             elif response.status == 403:
                 response_json = await response.json()
                 print(f"{repo_name} 请求被拒绝: {response_json}")
@@ -220,6 +231,95 @@ async def create_client_session():
         trust_env=True,  # 允许从环境变量读取代理设置
     )
 
+@app.get("/api/test-connection")
+async def test_connection():
+    """测试到GitHub的连接"""
+    try:
+        session = await create_client_session()
+        try:
+            # 请求参数，根据是否存在代理来设置
+            request_kwargs = {}
+            if PROXY_URL:
+                request_kwargs["proxy"] = PROXY_URL
+                print(f"使用代理测试连接: {PROXY_URL}")
+            else:
+                print("直接连接测试")
+            
+            # 测试连接到GitHub
+            async with session.get(
+                "https://api.github.com/",
+                **request_kwargs
+            ) as response:
+                if response.status == 200:
+                    return {
+                        "status": "success",
+                        "message": "连接到GitHub API成功",
+                        "proxy_used": PROXY_URL is not None,
+                        "proxy_url": PROXY_URL if PROXY_URL else None
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"GitHub API返回状态码: {response.status}",
+                        "proxy_used": PROXY_URL is not None,
+                        "proxy_url": PROXY_URL if PROXY_URL else None
+                    }
+        finally:
+            await session.close()
+    except Exception as e:
+        print(f"连接测试失败: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"连接失败: {str(e)}",
+            "proxy_used": PROXY_URL is not None,
+            "proxy_url": PROXY_URL if PROXY_URL else None
+        }
+
+@app.get("/api/rate-limit-status")
+async def check_rate_limit_status():
+    """检查GitHub API速率限制状态"""
+    try:
+        session = await create_client_session()
+        try:
+            # 请求参数，根据是否存在代理来设置
+            request_kwargs = {}
+            if PROXY_URL:
+                request_kwargs["proxy"] = PROXY_URL
+            
+            # 检查速率限制状态
+            async with session.get(
+                "https://api.github.com/rate_limit",
+                **request_kwargs
+            ) as response:
+                if response.status == 200:
+                    rate_data = await response.json()
+                    core_rate = rate_data.get("resources", {}).get("core", {})
+                    
+                    return {
+                        "status": "success",
+                        "rate_limit": {
+                            "limit": core_rate.get("limit", 0),
+                            "remaining": core_rate.get("remaining", 0),
+                            "reset": core_rate.get("reset", 0),
+                            "reset_time": datetime.fromtimestamp(core_rate.get("reset", 0)).isoformat() if core_rate.get("reset") else None
+                        }
+                    }
+                else:
+                    response_text = await response.text()
+                    return {
+                        "status": "error",
+                        "message": f"无法获取速率限制信息: {response.status}",
+                        "response": response_text
+                    }
+        finally:
+            await session.close()
+    except Exception as e:
+        print(f"检查速率限制失败: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"检查失败: {str(e)}"
+        }
+
 
 @app.get("/api/auth/github")
 async def github_auth():
@@ -228,6 +328,7 @@ async def github_auth():
     print(f"开始GitHub OAuth认证流程")
     print(f"CLIENT_ID: {GITHUB_CLIENT_ID[:5]}...")
     print(f"重定向URI: {GITHUB_REDIRECT_URI}")
+    print(f"代理配置: {PROXY_URL if PROXY_URL else '未使用代理'}")
     
     # 生成随机state用于防止CSRF攻击
     state = secrets.token_hex(16)
@@ -240,7 +341,9 @@ async def github_auth():
         f"scope=repo read:user user:email&"
         f"state={state}"
     )
-    print(f"授权URL: {auth_url}, state: {state}")
+    print(f"授权URL: {auth_url}")
+    print(f"State: {state}")
+    
     # 使用 status_code=302 确保正确的重定向
     return RedirectResponse(url=auth_url, status_code=302)
 
@@ -291,11 +394,11 @@ async def github_callback(code: str, state: str = None):
                 
                 if response.status != 200:
                     print(f"GitHub授权失败, 状态码: {response.status}, 响应: {response_text}")
-                    return {
-                        "status": "error",
-                        "error": f"GitHub API返回错误 (状态码: {response.status}): {response_text}",
-                        "redirect_url": f"{FRONTEND_BASE_URL}?error=github_api_error"
-                    }
+                    # 重定向到前端并带上错误信息
+                    return RedirectResponse(
+                        url=f"{FRONTEND_BASE_URL}?error=github_api_error&message={urllib.parse.quote(response_text)}",
+                        status_code=302
+                    )
                 
                 # 首先尝试JSON解析
                 try:
@@ -321,71 +424,52 @@ async def github_callback(code: str, state: str = None):
                         error_msg = "验证码无效或已过期。GitHub的验证码只能使用一次，且有效期很短。请重新进行授权流程。"
                         print(f"详细错误原因: {error_msg}")
                     
-                    # 直接返回JSON响应而不是重定向，以解决CORS问题
-                    return {
-                        "status": "error",
-                        "error": error_msg,
-                        "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(error_msg)}"
-                    }
+                    # 重定向到前端并带上错误信息
+                    return RedirectResponse(
+                        url=f"{FRONTEND_BASE_URL}?error=oauth_error&message={urllib.parse.quote(error_msg)}",
+                        status_code=302
+                    )
                 
                 # 获取访问令牌
                 access_token = resp_data.get("access_token")
                 if not access_token:
                     print("GitHub返回的响应中没有访问令牌")
                     
-                    # 直接返回JSON响应而不是重定向
-                    return {
-                        "status": "error",
-                        "error": "没有获取到访问令牌",
-                        "redirect_url": f"{FRONTEND_BASE_URL}?error=no_access_token"
-                    }
+                    # 重定向到前端并带上错误信息
+                    return RedirectResponse(
+                        url=f"{FRONTEND_BASE_URL}?error=no_access_token&message={urllib.parse.quote('没有获取到访问令牌')}",
+                        status_code=302
+                    )
                 
-                # 验证获取到的令牌是否有效
+                # 获取到访问令牌后直接返回成功，跳过用户信息验证以避免速率限制
                 print(f"获取到访问令牌: {access_token[:5]}...")
-                user_data = await get_user_info_from_token(session, access_token)
+                print("跳过用户信息验证以避免API速率限制")
                 
-                if not user_data or "login" not in user_data:
-                    print("无法使用获取的令牌获取用户信息，可能是令牌无效")
-                    
-                    # 直接返回JSON响应而不是重定向
-                    return {
-                        "status": "error",
-                        "error": "令牌验证失败",
-                        "redirect_url": f"{FRONTEND_BASE_URL}?error=invalid_token"
-                    }
-                
-                user_login = user_data["login"]
-                print(f"用户 {user_login} 授权成功, 已获取访问令牌")
-                
-                # 成功后返回JSON响应而不是重定向
-                return {
-                    "status": "success",
-                    "access_token": access_token,
-                    "user": user_data,
-                    "redirect_url": f"{FRONTEND_BASE_URL}?access_token={access_token}"
-                }
+                # 成功后重定向到前端并带上token
+                return RedirectResponse(
+                    url=f"{FRONTEND_BASE_URL}?token={access_token}",
+                    status_code=302
+                )
             
         finally:
             # 确保关闭会话
             await session.close()
     
     except HTTPException as http_ex:
-        # 将HTTP异常转换为JSON响应
+        # 将HTTP异常转换为重定向
         print(f"GitHub授权HTTP异常: {http_ex.detail}")
-        return {
-            "status": "error",
-            "error": str(http_ex.detail),
-            "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(str(http_ex.detail))}"
-        }
+        return RedirectResponse(
+            url=f"{FRONTEND_BASE_URL}?error=http_exception&message={urllib.parse.quote(str(http_ex.detail))}",
+            status_code=302
+        )
     except Exception as e:
         print(f"GitHub授权回调处理异常: {str(e)}")
         
-        # 直接返回JSON响应而不是重定向
-        return {
-            "status": "error",
-            "error": str(e),
-            "redirect_url": f"{FRONTEND_BASE_URL}?error={urllib.parse.quote(str(e))}"
-        }
+        # 重定向到前端并带上错误信息
+        return RedirectResponse(
+            url=f"{FRONTEND_BASE_URL}?error=callback_exception&message={urllib.parse.quote(str(e))}",
+            status_code=302
+        )
 
 
 @app.get("/api/starred-releases")
@@ -457,11 +541,25 @@ async def get_starred_releases(request: Request, force_refresh: bool = False):
             # 获取releases信息
             releases_data = await fetch_releases_with_limit(session, starred_repos, access_token)
 
-            sorted_releases = sorted(
-                [r for r in releases_data if r is not None],
+            # 分离有releases和没有releases的仓库
+            repos_with_releases = [r for r in releases_data if r is not None and r.get("has_releases", True)]
+            repos_without_releases = [r for r in releases_data if r is not None and not r.get("has_releases", True)]
+            
+            # 对有releases的仓库按时间排序
+            sorted_repos_with_releases = sorted(
+                repos_with_releases,
                 key=lambda x: x["latest_release"]["published_at"],
                 reverse=True
             )
+            
+            # 对没有releases的仓库按名称排序
+            sorted_repos_without_releases = sorted(
+                repos_without_releases,
+                key=lambda x: x["repo_name"]
+            )
+            
+            # 合并结果，有releases的在前面
+            sorted_releases = sorted_repos_with_releases + sorted_repos_without_releases
 
             print(f"成功获取到 {len(sorted_releases)} 个仓库的 release 信息")
 
@@ -532,6 +630,26 @@ async def verify_token(request: Request):
                         }
                     }
                     # --- 结束修改 ---
+                elif response.status == 403:
+                    response_text = await response.text()
+                    print(f"Token验证遇到速率限制，状态码: {response.status}, 响应: {response_text}")
+                    
+                    # 如果是速率限制，返回一个基本的成功响应
+                    if "rate limit exceeded" in response_text.lower():
+                        print("由于API速率限制，返回基本用户信息")
+                        return {
+                            "status": "success",
+                            "user": {
+                                "login": "unknown_user",
+                                "avatar_url": "",
+                                "name": "用户",
+                                "email": "",
+                                "last_activity_time": None,
+                                "rate_limited": True
+                            }
+                        }
+                    else:
+                        raise HTTPException(status_code=403, detail=f"GitHub API access forbidden: {response_text}")
                 else:
                     response_text = await response.text()
                     print(f"Token验证失败，状态码: {response.status}, 响应: {response_text}")
@@ -635,12 +753,25 @@ async def get_starred_releases_progress(request: Request, token: str, force_refr
                     # 短暂延迟，避免触发 GitHub API 限制
                     await asyncio.sleep(0.05)
 
-                # 排序并返回结果
-                sorted_releases = sorted(
-                    releases_data,
+                # 分离有releases和没有releases的仓库并排序
+                repos_with_releases = [r for r in releases_data if r.get("has_releases", True)]
+                repos_without_releases = [r for r in releases_data if not r.get("has_releases", True)]
+                
+                # 对有releases的仓库按时间排序
+                sorted_repos_with_releases = sorted(
+                    repos_with_releases,
                     key=lambda x: x["latest_release"]["published_at"],
                     reverse=True
                 )
+                
+                # 对没有releases的仓库按名称排序
+                sorted_repos_without_releases = sorted(
+                    repos_without_releases,
+                    key=lambda x: x["repo_name"]
+                )
+                
+                # 合并结果，有releases的在前面
+                sorted_releases = sorted_repos_with_releases + sorted_repos_without_releases
 
                 result = {
                     "status": "complete",
@@ -1215,6 +1346,30 @@ async def check_rss_updates(request: Request):
     except Exception as e:
         print(f"检查RSS更新时发生错误: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/test_oauth_flow.html")
+async def serve_test_page():
+    """提供OAuth测试页面"""
+    return FileResponse("test_oauth_flow.html")
+
+@app.get("/api/auth/callback/proxy")
+async def github_callback_proxy(code: str = None, error: str = None, state: str = None):
+    """代理GitHub回调到实际的回调处理器"""
+    if code:
+        # 如果有授权码，调用实际的回调处理器
+        return await github_callback(code, state)
+    elif error:
+        # 如果有错误，重定向到前端并带上错误信息
+        return RedirectResponse(
+            url=f"{FRONTEND_BASE_URL}?error={error}",
+            status_code=302
+        )
+    else:
+        # 没有参数，重定向到前端
+        return RedirectResponse(
+            url=FRONTEND_BASE_URL,
+            status_code=302
+        )
 
 if __name__ == "__main__":
     import uvicorn

@@ -15,7 +15,7 @@ document.title = '获取最新Releases列表'
 // 添加GitHub回调处理逻辑
 const handleGitHubCallback = () => {
   // 检查当前路径是否是GitHub回调路径
-  if (window.location.pathname.startsWith('/auth/callback')) {
+  if (window.location.pathname.startsWith('/auth/callback') || window.location.pathname.startsWith('/api/auth/callback')) {
     console.log('检测到GitHub回调路径，保留查询参数');
     
     // 获取当前URL的查询参数

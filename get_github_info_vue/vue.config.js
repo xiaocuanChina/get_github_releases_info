@@ -13,7 +13,8 @@ module.exports = defineConfig({
   devServer: {
     historyApiFallback: {
       rewrites: [
-        { from: /^\/auth\/callback/, to: '/index.html' }
+        { from: /^\/auth\/callback/, to: '/index.html' },
+        { from: /^\/api\/auth\/callback/, to: '/api/auth/callback.html' }
       ]
     }
   }

@@ -100,26 +100,35 @@ export default {
     const errorFromUrl = urlParams.get('error');
     const messageFromUrl = urlParams.get('message');
     
-    console.log('URL参数检查 - code:', code ? '存在' : '不存在', 'token:', tokenFromUrl ? '存在' : '不存在');
+    console.log('URL参数检查:', {
+      code: code ? '存在' : '不存在',
+      token: tokenFromUrl ? '存在' : '不存在',
+      error: errorFromUrl || '无',
+      message: messageFromUrl || '无'
+    });
     
-    if (code) {
-      // 如果URL中有授权码，处理GitHub回调
-      this.handleGitHubCallback(code);
-      return;
-    } else if (tokenFromUrl) {
-      console.log('从URL接收到token');
+    if (tokenFromUrl) {
+      console.log('从URL接收到token，长度:', tokenFromUrl.length);
       localStorage.setItem('github_token', tokenFromUrl);
       // 清除URL中的参数
       window.history.replaceState({}, document.title, window.location.pathname);
       // 刷新页面以应用新token
+      this.$message.success('GitHub授权成功！');
       window.location.reload();
       return;
     } else if (errorFromUrl) {
       this.loginFailed = true;
       this.errorMessage = messageFromUrl || '登录失败，请重试';
       console.error('登录错误:', this.errorMessage);
-      this.$message.error(this.errorMessage);
+      this.$message.error(`GitHub授权失败: ${this.errorMessage}`);
+      // 清除URL中的错误参数
+      window.history.replaceState({}, document.title, window.location.pathname);
       return;
+    } else if (code) {
+      // 如果URL中有授权码，说明是从GitHub重定向回来的，但这种情况不应该发生
+      // 因为我们已经改为直接重定向到后端
+      console.warn('收到授权码，但应该由后端处理。清除URL参数。');
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
     
     // 检查是否已有本地存储的token
@@ -158,7 +167,7 @@ export default {
       }
     },
     
-    handleLogin() {
+    async handleLogin() {
       try {
         // 保存当前的URL，用于登录后重定向回来
         localStorage.setItem('redirect_after_login', window.location.href);
@@ -171,6 +180,18 @@ export default {
         });
         
         console.log('准备跳转到GitHub授权页面:', API_ENDPOINTS.AUTH_GITHUB);
+        
+        // 先测试后端连接
+        try {
+          const testResponse = await fetch(API_ENDPOINTS.AUTH_GITHUB.replace('/auth/github', '/starred-releases'), {
+            method: 'HEAD'
+          });
+          console.log('后端连接测试:', testResponse.status);
+        } catch (testError) {
+          console.error('后端连接测试失败:', testError);
+          this.$message.error('无法连接到后端服务，请确保后端服务已启动');
+          return;
+        }
         
         // 跳转到后端的 GitHub 认证端点
         window.location.href = API_ENDPOINTS.AUTH_GITHUB;
@@ -202,9 +223,6 @@ export default {
         const response = await axios.get(`${API_ENDPOINTS.AUTH_CALLBACK}?code=${code}`, {
           // 添加超时设置
           timeout: 30000,
-          // 增加重试配置
-          retry: 3,
-          retryDelay: 1000,
           headers: {
             'Accept': 'application/json',
             'Content-Type': 'application/json'
@@ -212,7 +230,7 @@ export default {
         });
         
         console.log('认证响应状态:', response.status);
-        console.log('认证响应数据:', JSON.stringify(response.data).substring(0, 100) + '...');
+        console.log('认证响应数据:', response.data);
         
         if (response.data && response.data.access_token) {
           // 保存token
@@ -227,12 +245,19 @@ export default {
               headers: {
                 Authorization: `Bearer ${token}`
               },
-              // 添加超时设置
               timeout: 20000
             });
             
             if (verifyResponse.data.status === 'success') {
               console.log('令牌验证成功');
+              
+              // 检查是否遇到速率限制
+              if (verifyResponse.data.user.rate_limited) {
+                this.$message.warning('GitHub授权成功！但由于API速率限制，部分用户信息可能无法显示。');
+              } else {
+                this.$message.success('GitHub授权成功！');
+              }
+              
               this.$emit('auth-success', {
                 token: token,
                 user: verifyResponse.data.user
@@ -249,7 +274,9 @@ export default {
               }
               
               // 刷新页面以应用新token
-              window.location.reload();
+              setTimeout(() => {
+                window.location.reload();
+              }, 1000);
             } else {
               throw new Error('令牌验证响应无效');
             }

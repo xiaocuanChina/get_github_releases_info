@@ -141,18 +141,18 @@
                 <div class="control-group">
                   <div class="control-label">内容</div>
                   <div class="filter-controls">
-                    <el-tooltip content="显示全部" placement="top">
-                      <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'">
+                    <el-tooltip :content="`显示全部 (${allContentCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'all' }" @click="contentFilter = 'all'" @mouseenter="showTooltipCount('content-all')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-view"></i>
                       </div>
                     </el-tooltip>
-                    <el-tooltip content="仅源代码" placement="top">
-                      <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'">
+                    <el-tooltip :content="`仅源代码 (${sourceOnlyCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'source' }" @click="contentFilter = 'source'" @mouseenter="showTooltipCount('source')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-document"></i>
                       </div>
                     </el-tooltip>
-                    <el-tooltip content="包含二进制" placement="top">
-                      <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'">
+                    <el-tooltip :content="`包含二进制 (${binaryCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: contentFilter === 'binary' }" @click="contentFilter = 'binary'" @mouseenter="showTooltipCount('binary')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-coin"></i>
                       </div>
                     </el-tooltip>
@@ -162,19 +162,24 @@
                 <div class="control-group">
                   <div class="control-label">版本</div>
                   <div class="filter-controls">
-                    <el-tooltip content="显示全部" placement="top">
-                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'">
+                    <el-tooltip :content="`显示全部 (${allReposCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'all' }" @click="releaseTypeFilter = 'all'" @mouseenter="showTooltipCount('all')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-view"></i>
                       </div>
                     </el-tooltip>
-                    <el-tooltip content="仅正式版" placement="top">
-                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'">
+                    <el-tooltip :content="`仅正式版 (${releaseReposCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'release' }" @click="releaseTypeFilter = 'release'" @mouseenter="showTooltipCount('release')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-check"></i>
                       </div>
                     </el-tooltip>
-                    <el-tooltip content="仅预发布" placement="top">
-                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'">
+                    <el-tooltip :content="`仅预发布 (${prereleaseReposCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'prerelease' }" @click="releaseTypeFilter = 'prerelease'" @mouseenter="showTooltipCount('prerelease')" @mouseleave="hideTooltipCount">
                         <i class="el-icon-bell"></i>
+                      </div>
+                    </el-tooltip>
+                    <el-tooltip :content="`没有发布版本 (${noReleaseReposCount})`" placement="top">
+                      <div class="icon-button" :class="{ active: releaseTypeFilter === 'no-release' }" @click="releaseTypeFilter = 'no-release'" @mouseenter="showTooltipCount('no-release')" @mouseleave="hideTooltipCount">
+                        <i class="el-icon-minus"></i>
                       </div>
                     </el-tooltip>
                   </div>
@@ -324,6 +329,7 @@
                 :key="repo.repo_name"
                 :data-repo-name="repo.repo_name"
                 class="repo-card"
+                :class="{ 'no-releases': !repo.has_releases }"
             >
               <div class="repo-header">
                 <div class="repo-title">
@@ -427,7 +433,8 @@
                 </div>
               </div>
 
-              <div class="release-content">
+              <!-- 有releases的仓库显示发布内容 -->
+              <div v-if="repo.has_releases && repo.latest_release" class="release-content">
                 <h4>
                   <div class="release-info-left">
                     <a
@@ -486,6 +493,77 @@
                   >
                     查看所有版本
                   </el-button>
+                </div>
+              </div>
+
+              <!-- 没有releases的仓库显示提示信息 -->
+              <div v-else class="no-release-content">
+                <div class="no-release-header">
+                  <div class="no-release-status">
+                    <div class="status-icon">
+                      <i class="el-icon-warning-outline"></i>
+                    </div>
+                    <div class="status-text">
+                      <h4>暂无版本发布</h4>
+                      <span class="status-subtitle">该项目尚未发布任何Release版本</span>
+                    </div>
+                  </div>
+                  <div class="repo-badge">
+                    <el-tag size="small" type="info">开发中</el-tag>
+                  </div>
+                </div>
+                
+                <div class="no-release-suggestions">
+                  <h5>💡 你可以尝试：</h5>
+                  <div class="suggestions-grid">
+                    <div class="suggestion-item" @click="visitRepository(repo.repo_name)">
+                      <div class="suggestion-icon repo-icon">
+                        <i class="el-icon-s-home"></i>
+                      </div>
+                      <div class="suggestion-content">
+                        <div class="suggestion-title">访问仓库</div>
+                        <div class="suggestion-desc">查看项目主页和说明</div>
+                      </div>
+                    </div>
+                    
+                    <div class="suggestion-item" @click="viewCommits(repo.repo_name)">
+                      <div class="suggestion-icon commits-icon">
+                        <i class="el-icon-s-order"></i>
+                      </div>
+                      <div class="suggestion-content">
+                        <div class="suggestion-title">查看提交</div>
+                        <div class="suggestion-desc">了解最新开发动态</div>
+                      </div>
+                    </div>
+                    
+                    <div class="suggestion-item" @click="viewIssues(repo.repo_name)">
+                      <div class="suggestion-icon issues-icon">
+                        <i class="el-icon-chat-dot-square"></i>
+                      </div>
+                      <div class="suggestion-content">
+                        <div class="suggestion-title">查看Issues</div>
+                        <div class="suggestion-desc">了解问题和讨论</div>
+                      </div>
+                    </div>
+                    
+                    <div class="suggestion-item" @click="downloadSource(repo.repo_name)">
+                      <div class="suggestion-icon download-icon">
+                        <i class="el-icon-download"></i>
+                      </div>
+                      <div class="suggestion-content">
+                        <div class="suggestion-title">下载源码</div>
+                        <div class="suggestion-desc">获取最新代码</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- 仓库统计信息 -->
+                <div class="repo-stats-info" v-if="repo.stargazers_count">
+                  <div class="stat-item">
+                    <i class="el-icon-star-off"></i>
+                    <span>{{ formatStarCount(repo.stargazers_count) }} stars</span>
+                  </div>
                 </div>
               </div>
             </el-card>
@@ -650,6 +728,10 @@ export default {
       // 按内容类型筛选
       if (this.contentFilter !== 'all') {
         result = result.filter(repo => {
+          // 如果没有releases，则不参与内容筛选
+          if (!repo.has_releases || !repo.latest_release) {
+            return false;
+          }
           const isSourceOnly = this.isSourceCodeOnly(repo.latest_release);
           return this.contentFilter === 'source' ? isSourceOnly : !isSourceOnly;
         });
@@ -658,8 +740,17 @@ export default {
       // 按版本类型筛选
       if (this.releaseTypeFilter !== 'all') {
         result = result.filter(repo => {
-          const isPreRelease = this.isPreRelease(repo.latest_release);
-          return this.releaseTypeFilter === 'prerelease' ? isPreRelease : !isPreRelease;
+          if (this.releaseTypeFilter === 'no-release') {
+            // 筛选没有releases的仓库
+            return !repo.has_releases || !repo.latest_release;
+          } else {
+            // 筛选有releases的仓库
+            if (!repo.has_releases || !repo.latest_release) {
+              return false;
+            }
+            const isPreRelease = this.isPreRelease(repo.latest_release);
+            return this.releaseTypeFilter === 'prerelease' ? isPreRelease : !isPreRelease;
+          }
         });
       }
 
@@ -677,6 +768,41 @@ export default {
       const start = (this.currentPage - 1) * this.pageSize
       const end = start + this.pageSize
       return this.filteredRepos.slice(start, end)
+    },
+    // 统计各种类型仓库的数量
+    allReposCount() {
+      return this.releases.length;
+    },
+    releaseReposCount() {
+      return this.releases.filter(repo => {
+        if (!repo.has_releases || !repo.latest_release) return false;
+        return !this.isPreRelease(repo.latest_release);
+      }).length;
+    },
+    prereleaseReposCount() {
+      return this.releases.filter(repo => {
+        if (!repo.has_releases || !repo.latest_release) return false;
+        return this.isPreRelease(repo.latest_release);
+      }).length;
+    },
+    noReleaseReposCount() {
+      return this.releases.filter(repo => !repo.has_releases || !repo.latest_release).length;
+    },
+    // 内容类型统计
+    allContentCount() {
+      return this.releases.filter(repo => repo.has_releases && repo.latest_release).length;
+    },
+    sourceOnlyCount() {
+      return this.releases.filter(repo => {
+        if (!repo.has_releases || !repo.latest_release) return false;
+        return this.isSourceCodeOnly(repo.latest_release);
+      }).length;
+    },
+    binaryCount() {
+      return this.releases.filter(repo => {
+        if (!repo.has_releases || !repo.latest_release) return false;
+        return !this.isSourceCodeOnly(repo.latest_release);
+      }).length;
     },
     progressButtonStyle() {
       if (!this.loading) return {}
@@ -1079,7 +1205,10 @@ export default {
     },
 
     isSourceCodeOnly(release) {
-      if (!release.assets || release.assets.length === 0) {
+      if (!release || !release.assets) {
+        return false; // 没有release信息，返回false
+      }
+      if (release.assets.length === 0) {
         // 如果没有自定义资源，只有自动生成的源代码
         return true
       }
@@ -1202,7 +1331,7 @@ export default {
     },
 
     isPreRelease(release) {
-      return release.prerelease;
+      return release && release.prerelease;
     },
 
     formatCalendarHeader(date) {
@@ -1322,33 +1451,87 @@ export default {
 
     // 跳转到列表中最接近指定时间的项目
     jumpToNearestTimeInList(targetTimeStr) {
+      console.log('[jumpToNearestTimeInList] 开始跳转，目标时间:', targetTimeStr);
+      
       if (!targetTimeStr || this.viewMode !== 'list') {
+        console.log('[jumpToNearestTimeInList] 参数检查失败，targetTimeStr:', targetTimeStr, 'viewMode:', this.viewMode);
+        return;
+      }
+
+      // 使用filteredRepos而不是原始releases数据，确保与当前显示的数据一致
+      const currentRepos = this.filteredRepos;
+      
+      // 检查当前显示的数据是否存在
+      if (!currentRepos || currentRepos.length === 0) {
+        console.log('[jumpToNearestTimeInList] 当前显示的项目数据为空');
+        this.$message.warning('当前筛选条件下暂无项目数据');
         return;
       }
 
       try {
         const targetTime = new Date(targetTimeStr).getTime();
+        console.log('[jumpToNearestTimeInList] 目标时间戳:', targetTime);
+        
+        if (isNaN(targetTime)) {
+          console.error('[jumpToNearestTimeInList] 目标时间解析失败:', targetTimeStr);
+          this.$message.error('时间格式错误，跳转失败');
+          return;
+        }
+
+        // 过滤出有有效发布时间的项目（从当前显示的项目中筛选）
+        const validReleases = currentRepos.filter(repo => {
+          return repo.has_releases && 
+                 repo.latest_release && 
+                 repo.latest_release.published_at;
+        });
+
+        console.log('[jumpToNearestTimeInList] 有效项目数量:', validReleases.length, '当前显示项目总数:', currentRepos.length);
+
+        if (validReleases.length === 0) {
+          this.$message.warning('当前筛选条件下没有找到有发布时间的项目');
+          return;
+        }
 
         // 计算每个项目与目标时间的时间差
-        const timeDistances = this.releases.map((repo, index) => {
+        const timeDistances = validReleases.map((repo, index) => {
           const repoTime = new Date(repo.latest_release.published_at).getTime();
+          if (isNaN(repoTime)) {
+            console.warn('[jumpToNearestTimeInList] 项目时间解析失败:', repo.repo_name, repo.latest_release.published_at);
+            return null;
+          }
           return {
             index,
             repoName: repo.repo_name,
-            distance: Math.abs(repoTime - targetTime)
+            distance: Math.abs(repoTime - targetTime),
+            publishedAt: repo.latest_release.published_at
           };
-        });
+        }).filter(item => item !== null); // 过滤掉解析失败的项目
+
+        console.log('[jumpToNearestTimeInList] 时间距离计算完成，有效项目:', timeDistances.length);
+
+        if (timeDistances.length === 0) {
+          this.$message.warning('没有找到有效的时间数据');
+          return;
+        }
 
         // 按时间差排序，找出最接近的项目
         const nearestRepo = timeDistances.sort((a, b) => a.distance - b.distance)[0];
+        console.log('[jumpToNearestTimeInList] 找到最接近的项目:', nearestRepo.repoName, '发布时间:', nearestRepo.publishedAt);
 
         if (nearestRepo) {
-          // 计算该项目在哪一页
-          const repoIndex = this.releases.findIndex(r => r.repo_name === nearestRepo.repoName);
-          if (repoIndex === -1) return;
+          // 在当前显示的filteredRepos数组中找到该项目的索引
+          const repoIndex = currentRepos.findIndex(r => r.repo_name === nearestRepo.repoName);
+          console.log('[jumpToNearestTimeInList] 项目在当前显示数组中的索引:', repoIndex);
+          
+          if (repoIndex === -1) {
+            console.error('[jumpToNearestTimeInList] 在当前显示数组中找不到项目:', nearestRepo.repoName);
+            this.$message.error('项目定位失败');
+            return;
+          }
 
-          // 计算目标页码
+          // 计算目标页码（基于filteredRepos的索引）
           const targetPage = Math.floor(repoIndex / this.pageSize) + 1;
+          console.log('[jumpToNearestTimeInList] 目标页码:', targetPage, '当前页码:', this.currentPage);
 
           // 先设置当前页
           this.currentPage = targetPage;
@@ -1356,6 +1539,8 @@ export default {
           // 等待DOM更新后滚动到对应元素
           this.$nextTick(() => {
             const element = document.querySelector(`[data-repo-name="${nearestRepo.repoName}"]`);
+            console.log('[jumpToNearestTimeInList] 查找DOM元素结果:', element ? '找到' : '未找到');
+            
             if (element) {
               // 先清除可能存在的其他高亮元素
               document.querySelectorAll('.highlight').forEach(el => {
@@ -1386,17 +1571,16 @@ export default {
                 }, 1000);
               }, 2000);
 
-              //// 显示提示消息
-              //this.$message({
-              //  message: `已跳转到最接近该时间的项目: ${nearestRepo.repoName.split('/')[1]}`,
-              //  type: 'success',
-              //  duration: 3000
-              //});
+              console.log('[jumpToNearestTimeInList] 跳转成功');
+              this.$message.success(`已跳转到最接近该时间的项目: ${nearestRepo.repoName.split('/')[1]}`);
+            } else {
+              console.error('[jumpToNearestTimeInList] DOM元素未找到，可能页面还未渲染完成');
+              this.$message.error('页面元素未找到，请稍后重试');
             }
           });
         }
       } catch (error) {
-        console.error('跳转到最近时间项目失败:', error);
+        console.error('[jumpToNearestTimeInList] 跳转到最近时间项目失败:', error);
         this.$message.error('跳转失败，请重试');
       }
     },
@@ -1767,6 +1951,40 @@ export default {
           e.preventDefault(); // 防止表单提交
         }
       }
+    },
+
+    // 显示工具提示计数
+    showTooltipCount(type) {
+      // 当鼠标悬浮时可以添加额外的逻辑，目前通过计算属性动态显示数字
+    },
+
+    // 隐藏工具提示计数
+    hideTooltipCount() {
+      // 当鼠标离开时可以添加额外的逻辑
+    },
+
+    // 访问仓库
+    visitRepository(repoName) {
+      const repoUrl = `https://github.com/${repoName}`;
+      window.open(repoUrl, '_blank');
+    },
+
+    // 查看提交记录
+    viewCommits(repoName) {
+      const commitsUrl = `https://github.com/${repoName}/commits`;
+      window.open(commitsUrl, '_blank');
+    },
+
+    // 查看Issues
+    viewIssues(repoName) {
+      const issuesUrl = `https://github.com/${repoName}/issues`;
+      window.open(issuesUrl, '_blank');
+    },
+
+    // 下载源码
+    downloadSource(repoName) {
+      const downloadUrl = `https://github.com/${repoName}/archive/refs/heads/main.zip`;
+      window.open(downloadUrl, '_blank');
     },
   },
 
@@ -4294,6 +4512,243 @@ h2 {
   color: white !important;
   border-radius: 0 20px 20px 0 !important;
 }
+}
+
+/* 没有releases的仓库样式 */
+.repo-card.no-releases {
+  border-left: 4px solid #E6A23C;
+  background: linear-gradient(135deg, #fdf6ec 0%, #fef9f0 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card.no-releases::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #E6A23C, #F7D794);
+  border-radius: 0 0 0 60px;
+  opacity: 0.1;
+}
+
+.no-release-content {
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+/* 头部状态区域 */
+.no-release-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(230, 162, 60, 0.2);
+}
+
+.no-release-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #E6A23C, #F7D794);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(230, 162, 60, 0.3);
+}
+
+.status-text h4 {
+  margin: 0 0 4px 0;
+  color: #E6A23C;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.status-subtitle {
+  color: #666;
+  font-size: 13px;
+}
+
+.repo-badge {
+  flex-shrink: 0;
+}
+
+/* 建议操作区域 */
+.no-release-suggestions {
+  margin-bottom: 20px;
+}
+
+.no-release-suggestions h5 {
+  margin: 0 0 16px 0;
+  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.suggestion-item {
+  background: white;
+  border: 1px solid rgba(230, 162, 60, 0.2);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.suggestion-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.05), rgba(247, 215, 148, 0.05));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.suggestion-item:hover {
+  border-color: #E6A23C;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(230, 162, 60, 0.2);
+}
+
+.suggestion-item:hover::before {
+  opacity: 1;
+}
+
+.suggestion-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: white;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.repo-icon {
+  background: linear-gradient(135deg, #409EFF, #66B1FF);
+}
+
+.commits-icon {
+  background: linear-gradient(135deg, #67C23A, #85CE61);
+}
+
+.issues-icon {
+  background: linear-gradient(135deg, #F56C6C, #F78989);
+}
+
+.download-icon {
+  background: linear-gradient(135deg, #909399, #B1B3B8);
+}
+
+.suggestion-content {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.suggestion-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.suggestion-desc {
+  font-size: 11px;
+  color: #666;
+  line-height: 1.3;
+}
+
+/* 仓库统计信息 */
+.repo-stats-info {
+  padding-top: 16px;
+  border-top: 1px solid rgba(230, 162, 60, 0.2);
+  display: flex;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #666;
+  font-size: 13px;
+}
+
+.stat-item i {
+  color: #E6A23C;
+  font-size: 14px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .no-release-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .suggestion-item {
+    padding: 12px;
+  }
+
+  .suggestion-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .suggestion-title {
+    font-size: 12px;
+  }
+
+  .suggestion-desc {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .no-release-content {
+    padding: 16px;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* CSS样式添加 */

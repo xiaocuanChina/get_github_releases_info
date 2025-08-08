@@ -41,6 +41,15 @@
           <!-- 右侧：刷新按钮和批量获取RSS链接按钮 -->
           <div class="header-right">
             <div class="action-buttons">
+              <el-tooltip content="检查API速率限制" placement="top">
+                <el-button
+                    size="small"
+                    @click="checkRateLimit"
+                    :disabled="loading"
+                    icon="el-icon-info"
+                    circle
+                ></el-button>
+              </el-tooltip>
               <el-tooltip content="批量获取RSS链接" placement="top">
                 <el-button
                     size="small"
@@ -76,9 +85,9 @@
         <!-- 这个区域已移到搜索工具栏中，这里不再需要 -->
 
         <!-- 搜索控制工具栏 - 使用Element UI布局组件，更紧凑的布局 -->
-        <el-row class="search-toolbar" :gutter="10">
+        <el-row class="search-toolbar" :gutter="8">
           <!-- 左侧：搜索范围选择 (固定宽度) -->
-          <el-col :xs="24" :sm="4" :md="3" :lg="2" :xl="2">
+          <el-col :xs="24" :sm="3" :md="2" :lg="2" :xl="2">
             <div class="search-scope-container">
               <div class="control-group">
                 <div class="control-label">范围</div>
@@ -98,8 +107,8 @@
             </div>
           </el-col>
 
-          <!-- 中间：搜索框 (固定比例) -->
-          <el-col :xs="24" :sm="12" :md="13" :lg="13" :xl="13">
+          <!-- 中间：搜索框 (增加比例) -->
+          <el-col :xs="24" :sm="12" :md="13" :lg="12" :xl="12">
             <div class="search-input-wrapper">
               <el-input
                   v-model="searchQuery"
@@ -117,8 +126,8 @@
             </div>
           </el-col>
 
-          <!-- 右侧：控制栏和提示 (固定比例) -->
-          <el-col :xs="24" :sm="8" :md="8" :lg="9" :xl="9">
+          <!-- 右侧：控制栏和提示 (调整比例) -->
+          <el-col :xs="24" :sm="9" :md="9" :lg="10" :xl="10">
             <!-- 控件区域 - 收藏模式下显示 -->
             <div v-if="searchScope === 'starred'" class="controls-container">
               <div class="view-filter-controls">
@@ -741,8 +750,8 @@ export default {
       if (this.releaseTypeFilter !== 'all') {
         result = result.filter(repo => {
           if (this.releaseTypeFilter === 'no-release') {
-            // 筛选没有releases的仓库
-            return !repo.has_releases || !repo.latest_release;
+            // 筛选没有releases的仓库 - 修复逻辑
+            return repo.has_releases === false || !repo.latest_release;
           } else {
             // 筛选有releases的仓库
             if (!repo.has_releases || !repo.latest_release) {
@@ -786,7 +795,10 @@ export default {
       }).length;
     },
     noReleaseReposCount() {
-      return this.releases.filter(repo => !repo.has_releases || !repo.latest_release).length;
+      const count = this.releases.filter(repo => repo.has_releases === false || !repo.latest_release).length;
+      console.log('没有发布版本的仓库数量:', count);
+      console.log('没有发布版本的仓库:', this.releases.filter(repo => repo.has_releases === false || !repo.latest_release).map(r => r.repo_name));
+      return count;
     },
     // 内容类型统计
     allContentCount() {
@@ -907,6 +919,15 @@ export default {
           this.isAuthenticated = true;
           this.userInfo = response.data.user;
           this.lastActivityTime = response.data.user.last_activity_time; // 修改：存储最后活动时间
+          
+          // 检查是否遇到速率限制
+          if (response.data.rate_limited) {
+            this.$message.warning('GitHub API速率限制，使用缓存的用户信息，部分功能可能受限');
+          } else if (response.data.connection_error) {
+            this.$message.warning('GitHub连接异常，使用缓存的用户信息');
+          } else if (response.data.fallback) {
+            this.$message.info('使用本地缓存的用户信息');
+          }
 
           // 检查是否需要重新获取数据
           const now = new Date().getTime();
@@ -942,6 +963,35 @@ export default {
         // 判断是否为401错误
         if (error.response && error.response.status === 401) {
           this.handleInvalidToken();
+        } else if (error.response && error.response.status === 429) {
+          // 处理速率限制错误 - 这种情况现在应该很少发生，因为后端会处理
+          console.warn('遇到GitHub API速率限制，但token应该仍然有效');
+          this.accessToken = storedToken;
+          this.isAuthenticated = true;
+          // 设置一个基本的用户信息，避免显示unknown_user
+          this.userInfo = {
+            login: 'GitHub用户',
+            avatar_url: '',
+            name: 'GitHub用户',
+            email: '',
+            last_activity_time: null,
+            rate_limited: true
+          };
+          
+          this.$message.warning('GitHub API速率限制，部分功能可能受限，但您仍可使用缓存数据');
+          
+          // 尝试使用缓存数据
+          const cachedData = localStorage.getItem('releases_cache');
+          if (cachedData) {
+            try {
+              this.releases = JSON.parse(cachedData);
+              console.log('由于速率限制，使用本地缓存数据');
+              return true;
+            } catch (e) {
+              console.error('解析缓存数据失败:', e);
+            }
+          }
+          return true; // 即使没有缓存数据，也认为认证成功
         } else {
           // 其他错误，尝试继续使用缓存
           const cachedData = localStorage.getItem('releases_cache');
@@ -1906,6 +1956,10 @@ export default {
         }
       } catch (error) {
         console.error('获取最新用户活动时间失败:', error)
+        // 如果是速率限制，不显示错误
+        if (error.response && error.response.status === 429) {
+          console.log('由于速率限制，跳过获取用户活动时间')
+        }
         // 401错误由全局拦截器统一处理
       }
     },
@@ -1961,6 +2015,87 @@ export default {
     // 隐藏工具提示计数
     hideTooltipCount() {
       // 当鼠标离开时可以添加额外的逻辑
+    },
+
+    // 检查GitHub API速率限制状态
+    async checkRateLimit() {
+      try {
+        const headers = {};
+        if (this.accessToken) {
+          headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        
+        const response = await axios.get(`${API_ENDPOINTS.STARRED_RELEASES.replace('/starred-releases', '/rate-limit-status')}`, {
+          headers
+        });
+        
+        if (response.data.status === 'success') {
+          const rateLimit = response.data.rate_limit;
+          const core = rateLimit.core;
+          
+          let message = `GitHub API 速率限制状态:\n`;
+          message += `剩余请求: ${core.remaining}/${core.limit}\n`;
+          
+          if (core.time_until_reset_minutes > 0) {
+            message += `重置时间: ${core.time_until_reset_minutes} 分钟后\n`;
+          } else {
+            message += `重置时间: 不到1分钟\n`;
+          }
+          
+          message += `认证状态: ${rateLimit.is_authenticated ? '已认证' : '未认证'}`;
+          
+          if (core.remaining < 100) {
+            this.$message.warning(message);
+          } else {
+            this.$message.info(message);
+          }
+          
+          return rateLimit;
+        } else {
+          this.$message.error('无法获取速率限制信息');
+        }
+      } catch (error) {
+        console.error('检查速率限制失败:', error);
+        this.$message.error('检查速率限制失败: ' + (error.message || '未知错误'));
+      }
+    },
+
+    // 测试GitHub连接和认证状态
+    async testConnection() {
+      try {
+        const headers = {};
+        if (this.accessToken) {
+          headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        
+        const response = await axios.get(`${API_ENDPOINTS.STARRED_RELEASES.replace('/starred-releases', '/test-connection')}`, {
+          headers
+        });
+        
+        if (response.data.status === 'success') {
+          let message = `GitHub连接测试成功!\n`;
+          message += `认证类型: ${response.data.auth_type}\n`;
+          
+          if (response.data.user_info) {
+            message += `用户: ${response.data.user_info.login}`;
+            if (response.data.user_info.name) {
+              message += ` (${response.data.user_info.name})`;
+            }
+            message += `\n类型: ${response.data.user_info.type}`;
+          }
+          
+          if (response.data.proxy_used) {
+            message += `\n代理: ${response.data.proxy_url}`;
+          }
+          
+          this.$message.success(message);
+        } else {
+          this.$message.error(`连接测试失败: ${response.data.message}`);
+        }
+      } catch (error) {
+        console.error('连接测试失败:', error);
+        this.$message.error('连接测试失败: ' + (error.message || '未知错误'));
+      }
     },
 
     // 访问仓库
@@ -2220,7 +2355,7 @@ export default {
   position: sticky;
   top: 0;
   background-color: #fff;
-  z-index: 100;
+  z-index: 2; /* 降低z-index，避免挡住其他内容 */
   padding: 15px;
   margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
@@ -2350,33 +2485,35 @@ export default {
 .control-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px; /* 进一步减少内部间距 */
   margin-bottom: 0;
-  margin-right: 12px; /* 增加组之间的距离 */
-  padding: 0 2px; /* 添加水平内边距 */
+  margin-right: 6px; /* 减少组之间的距离 */
+  padding: 0 1px; /* 减少水平内边距 */
+  flex-shrink: 0; /* 防止控件被压缩 */
 }
 
 .control-label {
-  font-size: 15px; /* 增大字体 */
+  font-size: 14px; /* 稍微减小字体 */
   font-weight: 500; /* 加粗 */
   color: #606266;
   white-space: nowrap;
-  margin-right: 6px; /* 增加右边距 */
+  margin-right: 4px; /* 减少右边距 */
 }
 
 /* 视图和筛选控件样式 */
 .view-controls, .filter-controls {
   display: flex;
-  gap: 4px; /* 增加按钮间距 */
+  gap: 2px; /* 进一步减少按钮间距 */
   background-color: #f5f7fa;
-  border-radius: 20px;
-  padding: 3px 6px; /* 增加内边距 */
+  border-radius: 18px; /* 稍微减小圆角 */
+  padding: 2px 3px; /* 进一步减少内边距 */
+  flex-shrink: 0; /* 防止控件被压缩 */
 }
 
 /* 图标按钮样式 */
 .icon-button {
-  width: 34px; /* 增大按钮尺寸 */
-  height: 34px;
+  width: 30px; /* 稍微减小按钮尺寸 */
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2385,7 +2522,7 @@ export default {
   transition: all 0.3s;
   background-color: transparent;
   color: #606266;
-  margin: 0 2px; /* 稍微增加水平间距 */
+  margin: 0 1px; /* 减少水平间距 */
 }
 
 .icon-button:hover {
@@ -2399,7 +2536,7 @@ export default {
 }
 
 .icon-button .el-icon {
-  font-size: 18px; /* 增大图标尺寸 */
+  font-size: 16px; /* 调整图标尺寸 */
 }
 
 /* 主内容区域左右布局 */
@@ -2424,8 +2561,8 @@ export default {
 
 .footprints-card {
   position: sticky;
-  top: 90px; /* 增加顶部距离，与搜索栏保持更远的距离 */
-  height: calc(100vh - 260px); /* 调整高度 */
+  top: 120px; /* 增加顶部距离，避免被搜索栏遮挡 */
+  height: calc(100vh - 290px); /* 相应调整高度 */
   display: flex;
   flex-direction: column;
 }
@@ -2496,7 +2633,7 @@ export default {
 /* 左侧足迹区域 */
 .footprints-card {
   position: sticky;
-  top: 90px; /* 增加顶部距离，与搜索栏保持更远的距离 */
+  top: 120px; /* 增加顶部距离，避免被搜索栏遮挡 */
 }
 
 .footprints-header {
@@ -4397,6 +4534,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  padding-left: 10px; /* 添加左边距，与搜索框保持距离 */
 }
 
 /* 全局搜索提示样式 */
@@ -4444,6 +4582,16 @@ h2 {
     width: 100%;
     justify-content: center;
     margin-left: 0;
+  }
+
+  /* 在中等屏幕上调整控件间距 */
+  .control-group {
+    margin-right: 6px;
+  }
+
+  .view-controls, .filter-controls {
+    gap: 2px;
+    padding: 2px 3px;
   }
 }
 
@@ -4852,7 +5000,7 @@ h2 {
 /* 1. 修改输入框样式 */
 :deep(.search-input .el-input__inner) {
   border-radius: 20px !important; /* 保持整体圆角 */
-  padding-right: 120px !important; /* 为搜索按钮留出更多空间 */
+  padding-right: 100px !important; /* 减少为搜索按钮留出的空间 */
   border: 1px solid #DCDFE6 !important;
   transition: all 0.3s;
   height: 40px; /* 确保输入框有足够高度 */
@@ -4873,6 +5021,7 @@ h2 {
 .search-input-wrapper {
   position: relative;
   width: 100%; /* 确保搜索框占满可用宽度 */
+  max-width: 100%; /* 防止搜索框溢出 */
 }
 
 /* 内嵌搜索按钮样式 */
@@ -4892,22 +5041,24 @@ h2 {
   position: absolute;
   right: 0;
   top: 0;
+  z-index: 2; /* 确保搜索按钮在合适的层级 */
 }
 
 /* 全局搜索按钮样式 */
 .global-search-button {
-    padding: 0 30px;
+    padding: 0 20px; /* 减少内边距 */
     border-radius: 20px;
     right: 1px;
     top: 51%;
     transform: translateY(-50%);
     height: 38px;
-    font-size: 15px;
+    font-size: 14px; /* 减小字体 */
     font-weight: 600;
     box-shadow: 0 2px 8px rgba(24, 144, 255, 0.4);
-    min-width: 45px;
-    z-index: 3;
-    letter-spacing: 1px;
+    min-width: 80px; /* 设置合适的最小宽度 */
+    max-width: 90px; /* 设置最大宽度防止过宽 */
+    z-index: 1; /* 进一步降低z-index */
+    letter-spacing: 0.5px; /* 减少字间距 */
 }
 
 .global-search-button:hover {
@@ -4956,6 +5107,6 @@ h2 {
 /* 清除按钮样式调整 */
 :deep(.el-input__suffix .el-input__icon) {
   line-height: 1;
-  margin-right: 110px; /* 为搜索按钮留出更多空间 */
+  margin-right: 90px; /* 减少为搜索按钮留出的空间 */
 }
 </style>

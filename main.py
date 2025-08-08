@@ -46,8 +46,12 @@ app.add_middleware(
 # GitHub OAuth 配置
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+# 可选：Personal Access Token（用于开发或提高速率限制）
+GITHUB_PERSONAL_TOKEN = os.getenv("GITHUB_PERSONAL_TOKEN")
+
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
-    raise ValueError("GitHub OAuth credentials not found in environment variables")
+    if not GITHUB_PERSONAL_TOKEN:
+        raise ValueError("GitHub OAuth credentials or Personal Access Token not found in environment variables")
 
 # 重定向URI，必须与GitHub OAuth应用中配置的一致
 GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8080/auth/callback")
@@ -113,7 +117,8 @@ async def fetch_repo_info(session: aiohttp.ClientSession, repo_name: str, access
                 repo_data = await response.json()
                 return {
                     "avatar_url": repo_data.get("owner", {}).get("avatar_url"),
-                    "description": repo_data.get("description")
+                    "description": repo_data.get("description"),
+                    "stargazers_count": repo_data.get("stargazers_count", 0)
                 }
     except aiohttp.ClientConnectorError as e:
         print(f"连接到 GitHub API 失败: {str(e)}")
@@ -151,6 +156,7 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
                         "avatar_url": repo_info.get("avatar_url"),
                         "description": repo_info.get("description"),
                         "has_releases": True,
+                        "stargazers_count": repo_info.get("stargazers_count", 0),
                         "latest_release": {
                             "tag_name": latest_release["tag_name"],
                             "name": latest_release["name"],
@@ -172,7 +178,8 @@ async def fetch_releases(session: aiohttp.ClientSession, repo_name: str, access_
                         "avatar_url": repo_info.get("avatar_url"),
                         "description": repo_info.get("description"),
                         "has_releases": False,
-                        "latest_release": None
+                        "latest_release": None,
+                        "stargazers_count": repo_info.get("stargazers_count", 0)  # 使用从API获取的星标数
                     }
                     print(f"{repo_name} 没有 releases，但返回基本信息")
                     return result
@@ -232,7 +239,7 @@ async def create_client_session():
     )
 
 @app.get("/api/test-connection")
-async def test_connection():
+async def test_connection(request: Request = None):
     """测试到GitHub的连接"""
     try:
         session = await create_client_session()
@@ -245,15 +252,47 @@ async def test_connection():
             else:
                 print("直接连接测试")
             
+            headers = {"User-Agent": "GitHub-Starred-Releases-App"}
+            auth_type = "unauthenticated"
+            
+            # 检查是否有认证token
+            if request:
+                auth_header = request.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    access_token = auth_header.split(" ")[1]
+                    headers["Authorization"] = f"Bearer {access_token}"
+                    auth_type = "oauth_token"
+            
+            # 如果没有OAuth token但有Personal Access Token，使用它
+            elif GITHUB_PERSONAL_TOKEN:
+                headers["Authorization"] = f"Bearer {GITHUB_PERSONAL_TOKEN}"
+                auth_type = "personal_token"
+            
             # 测试连接到GitHub
             async with session.get(
-                "https://api.github.com/",
+                "https://api.github.com/user" if "Authorization" in headers else "https://api.github.com/",
+                headers=headers,
                 **request_kwargs
             ) as response:
                 if response.status == 200:
+                    # 如果是认证请求，获取用户信息
+                    user_info = None
+                    if "Authorization" in headers and response.headers.get("content-type", "").startswith("application/json"):
+                        try:
+                            user_data = await response.json()
+                            user_info = {
+                                "login": user_data.get("login"),
+                                "name": user_data.get("name"),
+                                "type": user_data.get("type")
+                            }
+                        except:
+                            pass
+                    
                     return {
                         "status": "success",
                         "message": "连接到GitHub API成功",
+                        "auth_type": auth_type,
+                        "user_info": user_info,
                         "proxy_used": PROXY_URL is not None,
                         "proxy_url": PROXY_URL if PROXY_URL else None
                     }
@@ -261,6 +300,7 @@ async def test_connection():
                     return {
                         "status": "error",
                         "message": f"GitHub API返回状态码: {response.status}",
+                        "auth_type": auth_type,
                         "proxy_used": PROXY_URL is not None,
                         "proxy_url": PROXY_URL if PROXY_URL else None
                     }
@@ -276,7 +316,7 @@ async def test_connection():
         }
 
 @app.get("/api/rate-limit-status")
-async def check_rate_limit_status():
+async def check_rate_limit_status(request: Request = None):
     """检查GitHub API速率限制状态"""
     try:
         session = await create_client_session()
@@ -286,22 +326,53 @@ async def check_rate_limit_status():
             if PROXY_URL:
                 request_kwargs["proxy"] = PROXY_URL
             
+            headers = {"User-Agent": "GitHub-Starred-Releases-App"}
+            
+            # 如果提供了认证token，使用认证请求检查
+            if request:
+                auth_header = request.headers.get("Authorization")
+                if auth_header and auth_header.startswith("Bearer "):
+                    access_token = auth_header.split(" ")[1]
+                    headers["Authorization"] = f"Bearer {access_token}"
+            
             # 检查速率限制状态
             async with session.get(
                 "https://api.github.com/rate_limit",
+                headers=headers,
                 **request_kwargs
             ) as response:
                 if response.status == 200:
                     rate_data = await response.json()
                     core_rate = rate_data.get("resources", {}).get("core", {})
+                    search_rate = rate_data.get("resources", {}).get("search", {})
+                    
+                    reset_timestamp = core_rate.get("reset", 0)
+                    reset_time = datetime.fromtimestamp(reset_timestamp) if reset_timestamp else None
+                    current_time = datetime.now()
+                    
+                    # 计算重置剩余时间
+                    time_until_reset = None
+                    if reset_time:
+                        time_until_reset = max(0, int((reset_time - current_time).total_seconds()))
                     
                     return {
                         "status": "success",
                         "rate_limit": {
-                            "limit": core_rate.get("limit", 0),
-                            "remaining": core_rate.get("remaining", 0),
-                            "reset": core_rate.get("reset", 0),
-                            "reset_time": datetime.fromtimestamp(core_rate.get("reset", 0)).isoformat() if core_rate.get("reset") else None
+                            "core": {
+                                "limit": core_rate.get("limit", 0),
+                                "remaining": core_rate.get("remaining", 0),
+                                "reset": reset_timestamp,
+                                "reset_time": reset_time.isoformat() if reset_time else None,
+                                "time_until_reset_seconds": time_until_reset,
+                                "time_until_reset_minutes": int(time_until_reset / 60) if time_until_reset else 0
+                            },
+                            "search": {
+                                "limit": search_rate.get("limit", 0),
+                                "remaining": search_rate.get("remaining", 0),
+                                "reset": search_rate.get("reset", 0)
+                            },
+                            "is_authenticated": "Authorization" in headers,
+                            "current_time": current_time.isoformat()
                         }
                     }
                 else:
@@ -499,18 +570,26 @@ async def get_starred_releases(request: Request, force_refresh: bool = False):
                 "User-Agent": "GitHub-Starred-Releases-App"
             }
 
-            async with session.get(rate_limit_url, headers=headers) as response:
+            # 请求参数，根据是否存在代理来设置
+            request_kwargs = {}
+            if PROXY_URL:
+                request_kwargs["proxy"] = PROXY_URL
+
+            async with session.get(rate_limit_url, headers=headers, **request_kwargs) as response:
                 if response.status == 200:
                     rate_data = await response.json()
                     core_rate = rate_data.get("resources", {}).get("core", {})
                     remaining = core_rate.get("remaining", 0)
                     reset_time = datetime.fromtimestamp(core_rate.get("reset", 0))
 
-                    if remaining < 100:  # 如果剩余请求数太少
+                    print(f"API速率限制状态: 剩余 {remaining} 次请求")
+
+                    if remaining < 50:  # 降低阈值，更早警告
                         wait_time = (reset_time - datetime.now()).total_seconds()
+                        wait_minutes = int(wait_time / 60)
                         raise HTTPException(
                             status_code=429,
-                            detail=f"API rate limit low. Resets in {int(wait_time)} seconds. Please try again later."
+                            detail=f"API rate limit low ({remaining} remaining). Resets in {wait_minutes} minutes. Please try again later."
                         )
 
             # 获取starred仓库列表（添加分页处理）
@@ -594,6 +673,33 @@ async def verify_token(request: Request):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
     access_token = auth_header.split(" ")[1]
+    
+    # 首先尝试从数据库获取用户信息（基于之前的点击记录）
+    def get_cached_user_info():
+        try:
+            conn = sqlite3.connect(DATABASE_FILE)
+            cursor = conn.cursor()
+            # 查询最近的用户登录记录
+            cursor.execute("SELECT user_login FROM user_clicks ORDER BY click_time DESC LIMIT 1")
+            result = cursor.fetchone()
+            if result:
+                user_login = result[0]
+                last_activity_time = get_user_last_activity(user_login)
+                return {
+                    "login": user_login,
+                    "avatar_url": "",
+                    "name": user_login,
+                    "email": "",
+                    "last_activity_time": last_activity_time,
+                    "from_cache": True
+                }
+        except Exception as e:
+            print(f"获取缓存用户信息失败: {e}")
+        finally:
+            if 'conn' in locals():
+                conn.close()
+        return None
+    
     try:
         async with aiohttp.ClientSession() as session:
             # 请求参数，根据是否存在代理来设置
@@ -634,20 +740,32 @@ async def verify_token(request: Request):
                     response_text = await response.text()
                     print(f"Token验证遇到速率限制，状态码: {response.status}, 响应: {response_text}")
                     
-                    # 如果是速率限制，返回一个基本的成功响应
+                    # 如果是速率限制，尝试返回缓存的用户信息
                     if "rate limit exceeded" in response_text.lower():
-                        print("由于API速率限制，返回基本用户信息")
-                        return {
-                            "status": "success",
-                            "user": {
-                                "login": "unknown_user",
-                                "avatar_url": "",
-                                "name": "用户",
-                                "email": "",
-                                "last_activity_time": None,
+                        print("遇到API速率限制，尝试使用缓存的用户信息")
+                        cached_user = get_cached_user_info()
+                        if cached_user:
+                            print(f"使用缓存的用户信息: {cached_user['login']}")
+                            return {
+                                "status": "success",
+                                "user": cached_user,
                                 "rate_limited": True
                             }
-                        }
+                        else:
+                            # 如果没有缓存信息，返回一个通用的用户信息
+                            print("没有缓存的用户信息，返回通用信息")
+                            return {
+                                "status": "success",
+                                "user": {
+                                    "login": "GitHub用户",
+                                    "avatar_url": "",
+                                    "name": "GitHub用户",
+                                    "email": "",
+                                    "last_activity_time": None,
+                                    "from_cache": True
+                                },
+                                "rate_limited": True
+                            }
                     else:
                         raise HTTPException(status_code=403, detail=f"GitHub API access forbidden: {response_text}")
                 else:
@@ -656,9 +774,30 @@ async def verify_token(request: Request):
                     raise HTTPException(status_code=401, detail=f"Invalid token. GitHub API returned: {response.status}")
     except aiohttp.ClientConnectorError as e:
         print(f"连接到GitHub API失败: {str(e)}")
+        # 尝试使用缓存信息
+        cached_user = get_cached_user_info()
+        if cached_user:
+            print("由于连接失败，使用缓存的用户信息")
+            return {
+                "status": "success",
+                "user": cached_user,
+                "connection_error": True
+            }
         raise HTTPException(status_code=503, detail=f"Connection error: {str(e)}")
+    except HTTPException:
+        # 重新抛出HTTP异常
+        raise
     except Exception as e:
         print(f"Token验证过程中发生异常: {str(e)}")
+        # 尝试使用缓存信息
+        cached_user = get_cached_user_info()
+        if cached_user:
+            print("由于异常，使用缓存的用户信息")
+            return {
+                "status": "success",
+                "user": cached_user,
+                "fallback": True
+            }
         raise HTTPException(status_code=401, detail=str(e))
 
 

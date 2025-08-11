@@ -15,7 +15,7 @@
    1. Application name：随便取个名字
    2. Homepage URL: http://localhost:8080
       - 这里的localhost如果部署到服务器上后可以根据自己的ip来配置
-   3. Authorization callback URL: http://localhost:8080/auth/callback
+   3. Authorization callback URL: http://localhost:8080/api/auth/callback
       - localhost同理
    4. Register application
 

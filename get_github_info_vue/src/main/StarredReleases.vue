@@ -447,65 +447,178 @@
               </div>
 
               <!-- 有releases的仓库显示发布内容 -->
-              <div v-if="repo.has_releases && repo.latest_release" class="release-content">
-                <h4>
-                  <div class="release-info-left">
-                    <a
-                        :href="repo.latest_release.html_url"
-                        target="_blank"
-                        @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
-                    >
-                      {{ repo.latest_release.name || repo.latest_release.tag_name }}
-                    </a>
+              <div v-if="repo.has_releases && repo.latest_release" class="release-content" 
+                   :class="{
+                     'prerelease-content': isPreRelease(repo.latest_release),
+                     'stable-content': !isPreRelease(repo.latest_release),
+                     'source-only-content': isSourceCodeOnly(repo.latest_release),
+                     'binary-content': !isSourceCodeOnly(repo.latest_release)
+                   }">
+                
+                <!-- 发布状态头部 -->
+                <div class="release-status-header">
+                  <div class="release-status-info">
+                    <div class="status-icon-wrapper">
+                      <i v-if="isPreRelease(repo.latest_release)" class="el-icon-warning status-icon prerelease-icon"></i>
+                      <i v-else class="el-icon-success status-icon stable-icon"></i>
+                    </div>
+                    <div class="status-details">
+                      <h4 class="release-title">
+                        <a
+                            :href="repo.latest_release.html_url"
+                            target="_blank"
+                            @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                        >
+                          {{ repo.latest_release.name || repo.latest_release.tag_name }}
+                        </a>
+                      </h4>
+                      <div class="release-meta">
+                        <span class="release-type">
+                          {{ isPreRelease(repo.latest_release) ? '预发布版本' : '正式发布版本' }}
+                        </span>
+                        <span class="release-separator">•</span>
+                        <span class="content-type">
+                          {{ isSourceCodeOnly(repo.latest_release) ? '仅源代码' : '包含二进制文件' }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="release-badges">
                     <el-tag
                         v-if="isPreRelease(repo.latest_release)"
                         size="small"
-                        type="warning"
-                        class="release-type-tag"
+                        class="custom-tag prerelease-tag"
                     >
+                      <i class="el-icon-bell"></i>
                       预发布
                     </el-tag>
                     <el-tag
                         v-else
                         size="small"
-                        type="success"
-                        class="release-type-tag"
+                        class="custom-tag stable-tag"
                     >
+                      <i class="el-icon-check"></i>
                       正式版
                     </el-tag>
                     <el-tag
                         v-if="isSourceCodeOnly(repo.latest_release)"
                         size="small"
-                        type="info"
-                        class="release-type-tag"
+                        class="custom-tag source-tag"
                     >
-                      仅包含源代码
+                      <i class="el-icon-document"></i>
+                      源代码
+                    </el-tag>
+                    <el-tag
+                        v-else
+                        size="small"
+                        class="custom-tag binary-tag"
+                    >
+                      <i class="el-icon-coin"></i>
+                      二进制
                     </el-tag>
                   </div>
-                  <!-- 移除这里的发布时间 -->
-                </h4>
-                <!-- 添加回markdown-wrapper容器 -->
-                <div class="markdown-wrapper" v-if="repo.latest_release.body">
-                  <div
-                      class="markdown-body"
-                      :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
-                      v-html="renderMarkdown(repo.latest_release.body)"
-                  ></div>
-                  <div
-                      class="expand-button"
-                      v-if="needsExpansion(repo.latest_release.body)"
-                      @click="toggleExpand(repo.repo_name)"
-                  >
-                    {{ expandedRepos.includes(repo.repo_name) ? '收起' : '展开' }}
+                </div>
+
+                <!-- 发布说明内容 -->
+                <div class="release-body" v-if="repo.latest_release.body">
+                  <div class="release-notes-header">
+                    <h5>
+                      <span v-if="isPreRelease(repo.latest_release)">⚠️ 预发布说明</span>
+                      <span v-else>📝 发布说明</span>
+                    </h5>
+                    <div class="release-stats" v-if="repo.latest_release.assets && repo.latest_release.assets.length > 0">
+                      <span class="assets-count">
+                        <i class="el-icon-paperclip"></i>
+                        {{ repo.latest_release.assets.length }} 个附件
+                      </span>
+                    </div>
+                  </div>
+                  <div class="markdown-wrapper">
+                    <div
+                        class="markdown-body"
+                        :class="{ 'collapsed': needsExpansion(repo.latest_release.body) && !expandedRepos.includes(repo.repo_name) }"
+                        v-html="renderMarkdown(repo.latest_release.body)"
+                    ></div>
+                    <div
+                        class="expand-button"
+                        v-if="needsExpansion(repo.latest_release.body)"
+                        @click="toggleExpand(repo.repo_name)"
+                    >
+                      {{ expandedRepos.includes(repo.repo_name) ? '收起' : '展开' }}
+                    </div>
                   </div>
                 </div>
-                <div class="release-footer">
-                  <el-button
-                      type="text"
-                      @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
-                  >
-                    查看所有版本
-                  </el-button>
+
+                <!-- 无发布说明时的提示 -->
+                <div v-else class="no-release-notes">
+                  <div class="no-notes-content">
+                    <i class="el-icon-document-remove"></i>
+                    <span>此版本未提供发布说明</span>
+                  </div>
+                </div>
+
+                <!-- 发布操作区域 -->
+                <div class="release-actions">
+                  <div class="actions-header">
+                    <h6>
+                      <i class="el-icon-s-operation"></i>
+                      快速操作
+                    </h6>
+                    <div class="release-quality-indicator">
+                      <span v-if="isPreRelease(repo.latest_release)" class="quality-badge prerelease-quality">
+                        <i class="el-icon-warning-outline"></i>
+                        测试版本
+                      </span>
+                      <span v-else class="quality-badge stable-quality">
+                        <i class="el-icon-circle-check"></i>
+                        稳定版本
+                      </span>
+                    </div>
+                  </div>
+                  <div class="action-buttons-grid">
+                    <div class="action-item" @click="openReleaseUrl(repo.latest_release.html_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)">
+                      <div class="action-icon release-icon">
+                        <i class="el-icon-view"></i>
+                      </div>
+                      <div class="action-content">
+                        <div class="action-title">查看发布</div>
+                        <div class="action-desc">查看完整发布信息</div>
+                      </div>
+                    </div>
+                    
+                    <div class="action-item" @click="openAllReleases(repo.latest_release.all_releases_url, repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)">
+                      <div class="action-icon versions-icon">
+                        <i class="el-icon-s-order"></i>
+                      </div>
+                      <div class="action-content">
+                        <div class="action-title">所有版本</div>
+                        <div class="action-desc">查看历史版本</div>
+                      </div>
+                    </div>
+                    
+                    <div class="action-item" @click="downloadReleaseSource(repo.repo_name, repo.latest_release.tag_name)">
+                      <div class="action-icon download-icon">
+                        <i class="el-icon-download"></i>
+                      </div>
+                      <div class="action-content">
+                        <div class="action-title">下载源码</div>
+                        <div class="action-desc">{{ repo.latest_release.tag_name }} 版本</div>
+                      </div>
+                    </div>
+
+                    <!-- 如果有附件，显示附件下载 -->
+                    <div v-if="repo.latest_release.assets && repo.latest_release.assets.length > 0" 
+                         class="action-item" 
+                         @click="window.open(repo.latest_release.html_url + '#assets', '_blank')">
+                      <div class="action-icon assets-icon">
+                        <i class="el-icon-paperclip"></i>
+                      </div>
+                      <div class="action-content">
+                        <div class="action-title">下载附件</div>
+                        <div class="action-desc">{{ repo.latest_release.assets.length }} 个文件</div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -2171,6 +2284,18 @@ export default {
         console.log(`本月 (${currentMonth}) 的发布:`, monthReleases.length);
       }
       console.log('===================');
+    },
+
+    // 打开发布页面
+    openReleaseUrl(url, repoName, releaseTag, releasePublishedAt) {
+      this.recordClick(repoName, releaseTag, releasePublishedAt);
+      window.open(url, '_blank');
+    },
+
+    // 下载发布版本源码
+    downloadReleaseSource(repoName, releaseTag) {
+      const downloadUrl = `https://github.com/${repoName}/archive/refs/tags/${releaseTag}.zip`;
+      window.open(downloadUrl, '_blank');
     },
   },
 
@@ -4810,6 +4935,136 @@ h2 {
   opacity: 0.1;
 }
 
+/* 有releases的仓库样式 - 根据发布类型设置不同主题 */
+.repo-card:has(.prerelease-content) {
+  border-left: 4px solid #E6A23C;
+  background: linear-gradient(135deg, #fef7e6 0%, #fff7e6 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card:has(.prerelease-content)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #E6A23C, #F7D794);
+  border-radius: 0 0 0 60px;
+  opacity: 0.08;
+}
+
+.repo-card:has(.stable-content) {
+  border-left: 4px solid #67C23A;
+  background: linear-gradient(135deg, #f0f9eb 0%, #f7fcf0 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card:has(.stable-content)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #67C23A, #85CE61);
+  border-radius: 0 0 0 60px;
+  opacity: 0.08;
+}
+
+.repo-card:has(.source-only-content) {
+  border-left: 4px solid #9C27B0;
+  background: linear-gradient(135deg, #f3e5f5 0%, #faf4fb 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card:has(.source-only-content)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #9C27B0, #BA68C8);
+  border-radius: 0 0 0 60px;
+  opacity: 0.08;
+}
+
+.repo-card:has(.binary-content) {
+  border-left: 4px solid #409EFF;
+  background: linear-gradient(135deg, #ecf5ff 0%, #f4f9ff 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.repo-card:has(.binary-content)::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(45deg, #409EFF, #66B1FF);
+  border-radius: 0 0 0 60px;
+  opacity: 0.08;
+}
+
+/* 为不支持:has()的浏览器提供备用样式 */
+.repo-card .prerelease-content {
+  --theme-color: #E6A23C;
+  --theme-bg: linear-gradient(135deg, #fef7e6 0%, #fff7e6 100%);
+}
+
+.repo-card .stable-content {
+  --theme-color: #67C23A;
+  --theme-bg: linear-gradient(135deg, #f0f9eb 0%, #f7fcf0 100%);
+}
+
+.repo-card .source-only-content {
+  --theme-color: #9C27B0;
+  --theme-bg: linear-gradient(135deg, #f3e5f5 0%, #faf4fb 100%);
+}
+
+.repo-card .binary-content {
+  --theme-color: #409EFF;
+  --theme-bg: linear-gradient(135deg, #ecf5ff 0%, #f4f9ff 100%);
+}
+
+/* 为不支持:has()的浏览器添加装饰元素 */
+.repo-card .prerelease-content::after,
+.repo-card .stable-content::after,
+.repo-card .source-only-content::after,
+.repo-card .binary-content::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: 0 0 0 60px;
+  opacity: 0.08;
+  z-index: 0;
+}
+
+.repo-card .prerelease-content::after {
+  background: linear-gradient(45deg, #E6A23C, #F7D794);
+}
+
+.repo-card .stable-content::after {
+  background: linear-gradient(45deg, #67C23A, #85CE61);
+}
+
+.repo-card .source-only-content::after {
+  background: linear-gradient(45deg, #9C27B0, #BA68C8);
+}
+
+.repo-card .binary-content::after {
+  background: linear-gradient(45deg, #409EFF, #66B1FF);
+}
+
 .no-release-content {
   padding: 24px;
   position: relative;
@@ -5024,6 +5279,393 @@ h2 {
 
   .suggestions-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 发布内容区域样式 */
+.release-content {
+  padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+/* 发布状态头部 */
+.release-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.release-status-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+}
+
+.status-icon-wrapper {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.prerelease-icon {
+  background: linear-gradient(135deg, #E6A23C, #F7D794);
+  color: white;
+}
+
+.stable-icon {
+  background: linear-gradient(135deg, #67C23A, #85CE61);
+  color: white;
+}
+
+.status-details {
+  flex: 1;
+}
+
+.release-title {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.release-title a {
+  color: #303133;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.release-title a:hover {
+  color: var(--theme-color, #409EFF);
+}
+
+.release-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.release-separator {
+  color: #ddd;
+}
+
+.release-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 自定义标签样式 */
+.custom-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid;
+  transition: all 0.3s;
+}
+
+.prerelease-tag {
+  background-color: rgba(230, 162, 60, 0.1);
+  color: #E6A23C;
+  border-color: rgba(230, 162, 60, 0.3);
+}
+
+.stable-tag {
+  background-color: rgba(103, 194, 58, 0.1);
+  color: #67C23A;
+  border-color: rgba(103, 194, 58, 0.3);
+}
+
+.source-tag {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #9C27B0;
+  border-color: rgba(156, 39, 176, 0.3);
+}
+
+.binary-tag {
+  background-color: rgba(64, 158, 255, 0.1);
+  color: #409EFF;
+  border-color: rgba(64, 158, 255, 0.3);
+}
+
+/* 发布说明区域 */
+.release-body {
+  margin-bottom: 20px;
+}
+
+.release-notes-header {
+  margin-bottom: 12px;
+}
+
+.release-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.release-notes-header h5 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.release-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.assets-count {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+/* 无发布说明提示 */
+.no-release-notes {
+  margin-bottom: 20px;
+  padding: 16px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  border: 1px dashed rgba(0, 0, 0, 0.1);
+}
+
+.no-notes-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #999;
+  font-size: 13px;
+}
+
+.no-notes-content i {
+  font-size: 16px;
+}
+
+/* 发布操作区域 */
+.release-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.actions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.actions-header h6 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.release-quality-indicator {
+  display: flex;
+  align-items: center;
+}
+
+.quality-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.prerelease-quality {
+  background-color: rgba(230, 162, 60, 0.1);
+  color: #E6A23C;
+  border: 1px solid rgba(230, 162, 60, 0.2);
+}
+
+.stable-quality {
+  background-color: rgba(103, 194, 58, 0.1);
+  color: #67C23A;
+  border: 1px solid rgba(103, 194, 58, 0.2);
+}
+
+.action-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.action-item {
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.05), rgba(64, 158, 255, 0.02));
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.action-item:hover {
+  border-color: var(--theme-color, #409EFF);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.action-item:hover::before {
+  opacity: 1;
+}
+
+.action-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: white;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.release-icon {
+  background: linear-gradient(135deg, #409EFF, #66B1FF);
+}
+
+.versions-icon {
+  background: linear-gradient(135deg, #67C23A, #85CE61);
+}
+
+.download-icon {
+  background: linear-gradient(135deg, #909399, #B1B3B8);
+}
+
+.assets-icon {
+  background: linear-gradient(135deg, #409EFF, #66B1FF);
+}
+
+.action-content {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.action-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.action-desc {
+  font-size: 10px;
+  color: #666;
+  line-height: 1.3;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .release-status-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .actions-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .action-buttons-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .action-item {
+    padding: 10px;
+  }
+
+  .action-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .action-title {
+    font-size: 11px;
+  }
+
+  .action-desc {
+    font-size: 9px;
+  }
+
+  .release-notes-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .release-content {
+    padding: 16px;
+  }
+
+  .action-buttons-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .release-badges {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

@@ -1,5 +1,7 @@
 // API 配置文件
-export const API_BASE_URL = 'http://localhost:8000';
+// 从环境变量获取后端端口，默认为8000
+const BACKEND_PORT = process.env.VUE_APP_BACKEND_PORT || '8000';
+export const API_BASE_URL = `http://localhost:${BACKEND_PORT}`;
 
 export const API_ENDPOINTS = {
   STARRED_RELEASES: `${API_BASE_URL}/api/starred-releases`,

@@ -11,6 +11,8 @@ module.exports = defineConfig({
   },
   publicPath: '/',
   devServer: {
+    // 从环境变量获取前端端口，默认为8080
+    port: process.env.FRONTEND_PORT || 8080,
     historyApiFallback: {
       rewrites: [
         { from: /^\/auth\/callback/, to: '/index.html' },

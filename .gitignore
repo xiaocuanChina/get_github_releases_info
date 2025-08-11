@@ -33,3 +33,8 @@ venv/
 Thumbs.db
 node_modules
 /user_activity.db
+/.kiro/steering/global-rules.md
+/get_github_info_vue/public/api/auth/callback.html
+/test_github_auth.py
+/test_oauth_flow.html
+/start_debug.bat

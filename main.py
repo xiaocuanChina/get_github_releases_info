@@ -1512,5 +1512,9 @@ async def github_callback_proxy(code: str = None, error: str = None, state: str 
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # 从环境变量获取端口配置，默认为8000
+    backend_port = int(os.getenv("BACKEND_PORT", "8000"))
+    print(f"后端服务启动在端口: {backend_port}")
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=backend_port)

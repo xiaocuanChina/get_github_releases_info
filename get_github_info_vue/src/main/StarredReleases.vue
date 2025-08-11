@@ -224,6 +224,10 @@
           <el-card v-if="viewMode === 'calendar'" class="calendar-card">
             <div class="custom-calendar-header">
               <span class="current-month">{{ formatCalendarHeader(calendarDate) }}</span>
+              <div class="calendar-info">
+                <span class="info-text">共 {{ releases.length }} 个仓库</span>
+                <el-button size="mini" @click="debugCalendarData" type="text">调试</el-button>
+              </div>
               <div class="calendar-controls">
                 <el-button-group>
                   <el-button size="small" @click="handlePrevMonth" class="calendar-control-btn">上个月</el-button>
@@ -233,7 +237,7 @@
                 </el-button>
               </div>
             </div>
-            <el-calendar v-model="calendarDate">
+            <el-calendar v-model="calendarDate" class="custom-calendar" :key="'calendar-' + calendarDate.getTime()">
               <!-- 不使用原有的header插槽 -->
               <template #dateCell="{ data }">
                 <div class="calendar-cell" :class="{
@@ -353,7 +357,7 @@
                       <a
                           :href="'https://github.com/' + repo.repo_name"
                           target="_blank"
-                          @click="recordClick(repo.repo_name, repo.latest_release.tag_name, repo.latest_release.published_at)"
+                          @click="recordClick(repo.repo_name, repo.latest_release?.tag_name, repo.latest_release?.published_at)"
                       >
                         {{ repo.repo_name }}
                       </a>
@@ -370,7 +374,7 @@
                       <p v-if="repo.description" class="repo-description">
                         {{ repo.description }}
                       </p>
-                      <div class="release-time">
+                      <div v-if="repo.has_releases && repo.latest_release" class="release-time">
                         <i class="el-icon-time"></i>
                         <span class="release-date">{{ formatDate(repo.latest_release.published_at) }}</span>
                       </div>
@@ -1204,7 +1208,13 @@ export default {
     },
 
     formatDate(dateString) {
-      return format(new Date(dateString), 'yyyy-MM-dd HH:mm')
+      if (!dateString) return '-';
+      try {
+        return format(new Date(dateString), 'yyyy-MM-dd HH:mm')
+      } catch (error) {
+        console.error('日期格式化错误:', error, dateString);
+        return dateString;
+      }
     },
 
     formatTime(dateString) {
@@ -1348,8 +1358,17 @@ export default {
 
     getReleasesForDate(dateString) {
       return this.releases.filter(release => {
-        const releaseDate = format(new Date(release.latest_release.published_at), 'yyyy-MM-dd')
-        return releaseDate === dateString
+        // 检查是否有有效的发布信息
+        if (!release.has_releases || !release.latest_release || !release.latest_release.published_at) {
+          return false;
+        }
+        try {
+          const releaseDate = format(new Date(release.latest_release.published_at), 'yyyy-MM-dd')
+          return releaseDate === dateString
+        } catch (error) {
+          console.error('日期格式化错误:', error, release);
+          return false;
+        }
       })
     },
 
@@ -2121,6 +2140,38 @@ export default {
       const downloadUrl = `https://github.com/${repoName}/archive/refs/heads/main.zip`;
       window.open(downloadUrl, '_blank');
     },
+
+    // 调试方法：测试日历数据
+    debugCalendarData() {
+      console.log('=== 日历调试信息 ===');
+      console.log('当前视图模式:', this.viewMode);
+      console.log('日历日期:', this.calendarDate);
+      console.log('总仓库数:', this.releases.length);
+      
+      const releasesWithDates = this.releases.filter(r => r.has_releases && r.latest_release && r.latest_release.published_at);
+      console.log('有发布日期的仓库数:', releasesWithDates.length);
+      
+      if (releasesWithDates.length > 0) {
+        console.log('发布日期示例:');
+        releasesWithDates.slice(0, 3).forEach(r => {
+          console.log(`- ${r.repo_name}: ${r.latest_release.published_at}`);
+        });
+        
+        // 测试今天的数据
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const todayReleases = this.getReleasesForDate(today);
+        console.log(`今天 (${today}) 的发布:`, todayReleases.length);
+        
+        // 测试本月的数据
+        const currentMonth = format(this.calendarDate, 'yyyy-MM');
+        const monthReleases = releasesWithDates.filter(r => {
+          const releaseDate = format(new Date(r.latest_release.published_at), 'yyyy-MM');
+          return releaseDate === currentMonth;
+        });
+        console.log(`本月 (${currentMonth}) 的发布:`, monthReleases.length);
+      }
+      console.log('===================');
+    },
   },
 
   async mounted() {
@@ -2222,6 +2273,8 @@ export default {
     // 添加时间轴点击事件处理
     this.$nextTick(() => {
       this.addTimelineClickHandlers();
+      // 调试日历数据
+      this.debugCalendarData();
     });
   },
 
@@ -2252,6 +2305,8 @@ export default {
       handler(newReleases) {
         if (newReleases && newReleases.length > 0) {
           this.fetchRepoStars();
+          console.log('日历视图调试 - releases数据更新:', newReleases.length, '个仓库');
+          console.log('有发布记录的仓库:', newReleases.filter(r => r.has_releases && r.latest_release).length);
         }
       },
       immediate: false
@@ -2264,6 +2319,17 @@ export default {
       // 如果切换到全局搜索，将视图模式设置为列表
       if (newScope === 'global') {
         this.viewMode = 'list';
+      }
+    },
+    // 添加对视图模式的监听
+    viewMode(newMode) {
+      console.log('视图模式切换到:', newMode);
+      if (newMode === 'calendar') {
+        console.log('当前日历日期:', this.calendarDate);
+        console.log('当前releases数据:', this.releases.length);
+        this.$nextTick(() => {
+          console.log('日历组件DOM更新完成');
+        });
       }
     }
   }
@@ -2912,35 +2978,36 @@ h2 {
 
 /* 日历卡片样式 */
 .calendar-card {
-  margin-top: 0px; /* 移除顶部边距 */
+  margin-top: 0px;
   margin-bottom: 20px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 260px); /* 改为与足迹区域高度一致 */
-  overflow: hidden; /* 添加溢出隐藏 */
+  height: calc(100vh - 260px);
+  overflow: hidden;
 }
 
 :deep(.calendar-card .el-card__body) {
-  padding: 8px;
-  height: 100%; /* 修改为100%高度 */
+  padding: 16px;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 添加溢出隐藏 */
+  overflow: hidden;
 }
 
 :deep(.calendar-card .el-calendar) {
-  height: 100%; /* 改为100%高度 */
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
   margin: 0;
-  overflow: hidden; /* 改为隐藏溢出 */
+  overflow: hidden;
 }
 
 :deep(.calendar-card .el-calendar__body) {
-  flex: 1; /* 改为弹性布局，占据剩余空间 */
-  overflow: auto; /* 改为可滚动 */
+  flex: 1;
+  overflow: auto;
+  padding: 0;
 }
 
 :deep(.el-calendar__header) {
@@ -2986,16 +3053,27 @@ h2 {
   margin: 0;
 }
 
+:deep(.el-calendar-table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
 :deep(.el-calendar-table th) {
   padding: 8px;
   text-align: center;
   border-bottom: 1px solid #EBEEF5;
+  background-color: #f5f7fa;
+  font-weight: 600;
+  color: #606266;
 }
 
 :deep(.el-calendar-table td) {
-  height: auto;
+  height: 80px;
+  min-height: 80px;
   border-bottom: 1px solid #EBEEF5;
   border-right: 1px solid #EBEEF5;
+  vertical-align: top;
+  padding: 0;
 }
 
 :deep(.el-calendar-table td:last-child) {
@@ -3004,8 +3082,10 @@ h2 {
 
 :deep(.el-calendar-table .el-calendar-day) {
   height: 100%;
+  min-height: 80px;
   padding: 0;
-  display: flex;
+  display: block;
+  width: 100%;
 }
 
 /* 错误卡片样式 */
@@ -3640,15 +3720,16 @@ h2 {
 /* 恢复日历单元格样式 */
 .calendar-cell {
   height: 100%;
-  min-height: 60px;
-  max-height: none; /* 移除最大高度限制 */
-  padding: 5px;
+  min-height: 80px;
+  max-height: none;
+  padding: 4px;
   border-radius: 6px;
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden; /* 防止内容溢出 */
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* 添加自定义日历头部样式 */
@@ -3659,12 +3740,23 @@ h2 {
   margin-bottom: 15px;
   padding: 8px 10px;
   border-bottom: 1px solid #ebeef5;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .custom-calendar-header .current-month {
   font-size: 16px;
   font-weight: bold;
   color: #303133;
+  flex: 1;
+}
+
+.custom-calendar-header .calendar-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .custom-calendar-header .calendar-controls {
@@ -3676,6 +3768,42 @@ h2 {
 /* 隐藏Element UI原生日历头部 */
 :deep(.el-calendar__header) {
   display: none !important;
+}
+
+/* 确保自定义日历正常显示 */
+:deep(.custom-calendar) {
+  width: 100%;
+  height: 100%;
+  display: flex !important;
+  flex-direction: column;
+}
+
+:deep(.custom-calendar .el-calendar__body) {
+  padding: 12px;
+  flex: 1;
+  overflow: auto;
+}
+
+:deep(.custom-calendar .el-calendar-table) {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+:deep(.custom-calendar .el-calendar-table td) {
+  height: 80px;
+  min-height: 80px;
+  vertical-align: top;
+  border: 1px solid #EBEEF5;
+  padding: 0;
+}
+
+:deep(.custom-calendar .el-calendar-table .el-calendar-day) {
+  height: 100%;
+  min-height: 80px;
+  padding: 0;
+  display: block;
+  width: 100%;
 }
 
 /* 覆盖按钮文本颜色 */
